@@ -173,7 +173,7 @@ final class CyberimpactClient
                     'query' => [
                         'page' => $page,
                         'limit' => $limit,
-                        'status' => 'subscribed',
+                        'status' => 'all',
                     ],
                     'timeout' => $request['timeout'],
                 ],
