@@ -322,7 +322,7 @@ final class SyncModuleController
 }
 
 .cyberimpact-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #667eea;
     color: white;
     padding: 3rem 2rem;
     border-radius: 8px;
@@ -361,7 +361,7 @@ final class SyncModuleController
 }
 
 .cyberimpact-card-header {
-    background: linear-gradient(135deg, #f5f7fa 0%, #f0f4f8 100%);
+    background: #f5f7fa;
     border-bottom: 1px solid #e5e7eb;
     padding: 1.5rem;
     display: flex;
@@ -382,7 +382,7 @@ final class SyncModuleController
     justify-content: center;
     width: 32px;
     height: 32px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #667eea;
     color: white;
     border-radius: 50%;
     font-weight: 700;
@@ -435,7 +435,7 @@ final class SyncModuleController
 }
 
 .cyberimpact-btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #667eea;
     color: white;
 }
 
@@ -455,7 +455,7 @@ final class SyncModuleController
 }
 
 .cyberimpact-btn-success {
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    background: #10b981;
     color: white;
 }
 
