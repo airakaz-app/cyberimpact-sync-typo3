@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" datatype="plaintext" original="EXT:backend/Resources/Private/Language/locallang_sitesettings.xlf" date="2024-09-10T12:13:00Z" product-name="backend" target-language="fr">
+    <header/>
+    <body>
+      <trans-unit id="overview.title" x-unused-since="14.0" approved="yes">
+        <source>Site Settings Overview</source>
+        <target state="final">Aperçu des paramètres de site</target>
+      </trans-unit>
+      <trans-unit id="overview.setSummary" x-unused-since="14.0" approved="yes">
+        <source>Sets (%d)</source>
+        <target state="final">Configurations prédéfinies (%d)</target>
+      </trans-unit>
+      <trans-unit id="overview.customSettingsSummary" x-unused-since="14.0" approved="yes">
+        <source>Custom Settings (%d)</source>
+        <target state="final">Paramètres personnalisés (%d)</target>
+      </trans-unit>
+      <trans-unit id="overview.editSettings" x-unused-since="14.0" approved="yes">
+        <source>Edit Settings</source>
+        <target state="final">Modifier les paramètres</target>
+      </trans-unit>
+      <trans-unit id="overview.message.notEditable" x-unused-since="14.0" approved="yes">
+        <source>The sets of this site do not provide any configurable settings.</source>
+        <target state="final">Les configurations prédéfinies de ce site ne fournissent pas de paramètres configurables.</target>
+      </trans-unit>
+      <trans-unit id="overview.noSiteSettingsExists.title" x-unused-since="14.0" approved="yes">
+        <source>No configurable Site Settings found</source>
+        <target state="final">Aucun paramètre de site configurable trouvé</target>
+      </trans-unit>
+      <trans-unit id="overview.noSiteSettingsExists.message" x-unused-since="14.0" approved="yes">
+        <source>See the documentation for instructions on defining settings via site sets.</source>
+        <target state="final">Reportez-vous à la documentation pour les instructions sur la définition des paramètres via les configurations prédéfinies (Site sets).</target>
+      </trans-unit>
+      <trans-unit id="overview.noSiteSettingsExists.button-documentation-label" x-unused-since="14.0" approved="yes">
+        <source>Open the documentation</source>
+        <target state="final">Ouvrir la documentation</target>
+      </trans-unit>
+      <trans-unit id="edit.headline" approved="yes">
+        <source>Site Settings for "%s"</source>
+        <target state="final">Paramètres de site pour « %s »</target>
+      </trans-unit>
+      <trans-unit id="edit.noSettings.title" approved="yes">
+        <source>No settings available</source>
+        <target state="final">Aucun paramètre disponible</target>
+      </trans-unit>
+      <trans-unit id="edit.noSettings.message" approved="yes">
+        <source>The site '%s' does not provide configurable settings.</source>
+        <target state="final">Le site « %s » ne fournit pas de paramètres configurables.</target>
+      </trans-unit>
+      <trans-unit id="edit.yamlExport" approved="yes">
+        <source>YAML export</source>
+        <target state="final">Export YAML</target>
+      </trans-unit>
+      <trans-unit id="edit.editSiteConfiguration" approved="yes">
+        <source>Edit site configuration</source>
+        <target state="final">Modifier la configuration du site</target>
+      </trans-unit>
+      <trans-unit id="save.message.updated" approved="yes">
+        <source>Settings updated.</source>
+        <target state="final">Paramètres mis à jour.</target>
+      </trans-unit>
+      <trans-unit id="categories.other" approved="yes">
+        <source>Other</source>
+        <target state="final">Autres</target>
+      </trans-unit>
+      <trans-unit id="labels.edit" approved="yes">
+        <source>Edit Site Settings "%s"</source>
+        <target state="final">Modifier les paramètres du site « %s »</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

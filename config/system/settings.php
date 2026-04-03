@@ -69,6 +69,11 @@ return [
             'options' => [],
         ],
     ],
+    'LANG' => [
+        'availableLocales' => [
+            'fr',
+        ],
+    ],
     'LOG' => [
         'TYPO3' => [
             'CMS' => [
