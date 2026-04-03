@@ -12,7 +12,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'cyberimpact:finalize-run', description: 'Finalize next run pending finalization.')]
+#[AsCommand(name: 'cyberimpact:finaliser-run', description: 'Finaliser le prochain run en attente.')]
 final class FinalizeRunCommand extends Command
 {
     public function __construct(

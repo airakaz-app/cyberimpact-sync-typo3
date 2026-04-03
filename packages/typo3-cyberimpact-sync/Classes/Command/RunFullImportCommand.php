@@ -20,8 +20,8 @@ use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 
 #[AsCommand(
-    name: 'cyberimpact:run-full-import',
-    description: 'Execute complete import workflow: scan folder → process chunks → finalize runs (all-in-one)'
+    name: 'cyberimpact:import-complet',
+    description: 'Exécuter le workflow complet d\'import : scanner → traiter les chunks → finaliser les runs'
 )]
 final class RunFullImportCommand extends Command
 {
@@ -45,20 +45,20 @@ final class RunFullImportCommand extends Command
             'max-processing-seconds',
             null,
             InputOption::VALUE_OPTIONAL,
-            'Max time (seconds) to spend processing chunks (default: 3600 = 1 hour)',
+            'Temps max (secondes) à consacrer au traitement des chunks (défaut : 3600 = 1 heure)',
             3600
         );
         $this->addOption(
             'skip-scan',
             null,
             InputOption::VALUE_NONE,
-            'Skip scan phase, only process existing chunks'
+            'Ignorer la phase de scan, traiter uniquement les chunks existants'
         );
         $this->addOption(
             'skip-finalize',
             null,
             InputOption::VALUE_NONE,
-            'Skip finalize phase, only scan and process'
+            'Ignorer la phase de finalisation, scanner et traiter seulement'
         );
     }
 
@@ -69,12 +69,12 @@ final class RunFullImportCommand extends Command
         $skipScan = $input->getOption('skip-scan');
         $skipFinalize = $input->getOption('skip-finalize');
 
-        $output->writeln('<comment>🚀 Starting full import workflow...</comment>');
+        $output->writeln('<comment>🚀 Démarrage du workflow d\'import complet...</comment>');
         $output->writeln('');
 
         // Phase 1: SCAN FOLDER
         if (!$skipScan) {
-            $output->writeln('<info>📂 PHASE 1: Scanning incoming folder...</info>');
+            $output->writeln('<info>📂 PHASE 1 : Scan du dossier incoming...</info>');
             $scanResult = $this->scanImportFolder($output);
             if ($scanResult === Command::FAILURE) {
                 return Command::FAILURE;
@@ -83,20 +83,20 @@ final class RunFullImportCommand extends Command
         }
 
         // Phase 2: PROCESS CHUNKS
-        $output->writeln('<info>⚡ PHASE 2: Processing chunks...</info>');
+        $output->writeln('<info>⚡ PHASE 2 : Traitement des chunks...</info>');
         $processResult = $this->processAllPendingChunks($output, $maxProcessingSeconds, $startTime);
         $output->writeln('');
 
         // Phase 3: FINALIZE RUNS
         if (!$skipFinalize) {
-            $output->writeln('<info>✅ PHASE 3: Finalizing completed runs...</info>');
+            $output->writeln('<info>✅ PHASE 3 : Finalisation des runs complétés...</info>');
             $this->finalizeCompletedRuns($output);
             $output->writeln('');
         }
 
         $elapsedTime = time() - $startTime;
         $output->writeln(sprintf(
-            '<comment>✨ Import workflow completed in %d seconds</comment>',
+            '<comment>✨ Workflow d\'import complété en %d secondes</comment>',
             $elapsedTime
         ));
 
@@ -117,7 +117,7 @@ final class RunFullImportCommand extends Command
         $storage = $this->storageRepository->findByUid($storageUid);
         if (!$storage) {
             $output->writeln(sprintf(
-                '<error>❌ FAL storage not found: %d</error>',
+                '<error>❌ Stockage FAL non trouvé : %d</error>',
                 $storageUid
             ));
             return Command::FAILURE;
@@ -125,7 +125,7 @@ final class RunFullImportCommand extends Command
 
         if (!$storage->hasFolder($incomingFolder)) {
             $output->writeln(sprintf(
-                '<warning>⚠️  FAL folder not found: %s (storage %d)</warning>',
+                '<warning>⚠️  Dossier FAL non trouvé : %s (stockage %d)</warning>',
                 $incomingFolder,
                 $storageUid
             ));
@@ -162,7 +162,7 @@ final class RunFullImportCommand extends Command
             );
 
             $output->writeln(sprintf(
-                '  ✓ Run #%d: %s (%d rows, %d valid, %d errors, %d chunks)',
+                '  ✓ Run #%d : %s (%d lignes, %d valides, %d erreurs, %d chunks)',
                 $runUid,
                 $file->getName(),
                 $prepared['totalRows'],
@@ -173,7 +173,7 @@ final class RunFullImportCommand extends Command
         }
 
         $output->writeln(sprintf(
-            '<comment>Scan result: %d new runs queued, %d skipped</comment>',
+            '<comment>Scan terminé : %d nouveaux runs créés, %d ignorés</comment>',
             $queuedCount,
             $skippedCount
         ));
@@ -200,7 +200,7 @@ final class RunFullImportCommand extends Command
             $elapsedTime = time() - $startTime;
             if ($elapsedTime >= $maxSeconds) {
                 $output->writeln(sprintf(
-                    '<warning>⏱️  Processing timeout reached (%d seconds)</warning>',
+                    '<warning>⏱️  Délai d\'attente dépassé (%d secondes)</warning>',
                     $maxSeconds
                 ));
                 break;
@@ -210,7 +210,7 @@ final class RunFullImportCommand extends Command
             $requeued = $this->chunkStorage->requeueStaleProcessingChunks($staleAfterSeconds);
             if ($requeued > 0) {
                 $output->writeln(sprintf(
-                    '  ⚠️  Requeued %d stale chunks',
+                    '  ⚠️  %d chunks périmés remis en attente',
                     $requeued
                 ));
             }
@@ -225,20 +225,20 @@ final class RunFullImportCommand extends Command
 
                 $processedCount++;
                 $output->writeln(sprintf(
-                    '  ✓ Chunk processed (#%d)',
+                    '  ✓ Chunk traité (#%d)',
                     $processedCount
                 ));
             } catch (\Throwable $e) {
                 $errorCount++;
                 $output->writeln(sprintf(
-                    '  ❌ Error processing chunk: %s',
+                    '  ❌ Erreur lors du traitement du chunk : %s',
                     $e->getMessage()
                 ));
             }
         }
 
         $output->writeln(sprintf(
-            '<comment>Processing result: %d chunks processed, %d errors</comment>',
+            '<comment>Traitement terminé : %d chunks traités, %d erreurs</comment>',
             $processedCount,
             $errorCount
         ));
@@ -263,14 +263,14 @@ final class RunFullImportCommand extends Command
             if ($result['status'] === 'finalized') {
                 $finalizedCount++;
                 $output->writeln(sprintf(
-                    '  ✓ Run finalized: %s',
+                    '  ✓ Run finalisé : %s',
                     $result['message']
                 ));
             }
         }
 
         $output->writeln(sprintf(
-            '<comment>Finalize result: %d runs finalized</comment>',
+            '<comment>Finalisation terminée : %d runs finalisés</comment>',
             $finalizedCount
         ));
     }

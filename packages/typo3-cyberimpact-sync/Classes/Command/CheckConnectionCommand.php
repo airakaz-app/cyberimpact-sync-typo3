@@ -10,7 +10,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'cyberimpact:check-connection', description: 'Check Cyberimpact API connectivity.')]
+#[AsCommand(name: 'cyberimpact:verifier-connexion', description: 'Vérifier la connectivité API Cyberimpact.')]
 final class CheckConnectionCommand extends Command
 {
     public function __construct(private readonly CyberimpactClient $client)
@@ -23,7 +23,7 @@ final class CheckConnectionCommand extends Command
         try {
             $result = $this->client->checkConnection();
         } catch (\Throwable $exception) {
-            $output->writeln('<error>Cyberimpact connection failed: ' . $exception->getMessage() . '</error>');
+            $output->writeln('<error>Connexion Cyberimpact échouée : ' . $exception->getMessage() . '</error>');
             return Command::FAILURE;
         }
 

@@ -1,15 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xliff version="1.0">
-    <file source-language="en" datatype="plaintext" original="EXT:cyberimpact_sync/Resources/Private/Language/locallang_mod.xlf">
+    <file source-language="en" target-language="fr" datatype="plaintext" original="EXT:cyberimpact_sync/Resources/Private/Language/locallang_mod.xlf">
         <body>
             <trans-unit id="mlang_tabs_tab">
                 <source>Cyberimpact Sync</source>
+                <target>Cyberimpact Sync</target>
             </trans-unit>
             <trans-unit id="mlang_labels_tablabel">
                 <source>Upload and process Cyberimpact contact imports.</source>
+                <target>Téléchargez et traitez les imports de contacts Cyberimpact.</target>
             </trans-unit>
             <trans-unit id="mlang_labels_tabdescr">
                 <source>Upload Excel files, queue runs, and review Cyberimpact synchronization data.</source>
+                <target>Téléchargez des fichiers Excel, créez des runs et consultez les données de synchronisation Cyberimpact.</target>
             </trans-unit>
         </body>
     </file>

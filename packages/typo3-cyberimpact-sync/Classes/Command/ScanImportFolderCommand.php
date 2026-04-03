@@ -15,7 +15,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 
-#[AsCommand(name: 'cyberimpact:scan-import-folder', description: 'Scan FAL incoming folder, queue runs and prepare chunks.')]
+#[AsCommand(name: 'cyberimpact:scanner-dossier', description: 'Scanner le dossier FAL, créer des runs et préparer les chunks.')]
 final class ScanImportFolderCommand extends Command
 {
     public function __construct(
@@ -39,11 +39,11 @@ final class ScanImportFolderCommand extends Command
 
         $storage = $this->storageRepository->findByUid($storageUid);
         if (!$storage) {
-            $output->writeln(sprintf('<error>FAL storage not found: %d</error>', $storageUid));
+            $output->writeln(sprintf('<error>Stockage FAL non trouvé : %d</error>', $storageUid));
             return Command::FAILURE;
         }
         if (!$storage->hasFolder($incomingFolder)) {
-            $output->writeln(sprintf('<error>FAL folder not found: %s (storage %d)</error>', $incomingFolder, $storageUid));
+            $output->writeln(sprintf('<error>Dossier FAL non trouvé : %s (stockage %d)</error>', $incomingFolder, $storageUid));
             return Command::FAILURE;
         }
 
@@ -64,7 +64,7 @@ final class ScanImportFolderCommand extends Command
             $queuedCount++;
             $prepared = $this->prepareRunFromFile($runUid, $file->getForLocalProcessing(), $chunkSize);
             $output->writeln(sprintf(
-                '<info>Queued+prepared run #%d for file %s (rows=%d, valid=%d, errors=%d, chunks=%d)</info>',
+                '<info>Run #%d créé+préparé pour %s (%d lignes, %d valides, %d erreurs, %d chunks)</info>',
                 $runUid,
                 $file->getName(),
                 $prepared['totalRows'],
@@ -74,7 +74,7 @@ final class ScanImportFolderCommand extends Command
             ));
         }
 
-        $output->writeln(sprintf('<comment>Scan completed. New runs queued: %d</comment>', $queuedCount));
+        $output->writeln(sprintf('<comment>Scan complété. Nouveaux runs créés : %d</comment>', $queuedCount));
 
         return Command::SUCCESS;
     }

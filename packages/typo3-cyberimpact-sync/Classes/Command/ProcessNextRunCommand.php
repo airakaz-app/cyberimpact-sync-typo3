@@ -12,7 +12,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 
-#[AsCommand(name: 'cyberimpact:process-next-run', description: 'Process next pending run chunk.')]
+#[AsCommand(name: 'cyberimpact:traiter-chunk', description: 'Traiter le prochain chunk en attente.')]
 final class ProcessNextRunCommand extends Command
 {
     public function __construct(
@@ -29,16 +29,16 @@ final class ProcessNextRunCommand extends Command
         $staleAfterSeconds = max(60, (int)($settings['staleChunkTimeoutSeconds'] ?? 900));
         $requeued = $this->chunkStorage->requeueStaleProcessingChunks($staleAfterSeconds);
         if ($requeued > 0) {
-            $output->writeln('<comment>Requeued stale processing chunks: ' . $requeued . '.</comment>');
+            $output->writeln('<comment>Chunks périmés remis en attente : ' . $requeued . '.</comment>');
         }
 
         $processed = $this->chunkProcessor->processNextPendingChunk();
         if ($processed === false) {
-            $output->writeln('<comment>No pending chunk found.</comment>');
+            $output->writeln('<comment>Aucun chunk en attente trouvé.</comment>');
             return Command::SUCCESS;
         }
 
-        $output->writeln('<info>Processed next pending chunk.</info>');
+        $output->writeln('<info>Chunk en attente traité.</info>');
 
         return Command::SUCCESS;
     }

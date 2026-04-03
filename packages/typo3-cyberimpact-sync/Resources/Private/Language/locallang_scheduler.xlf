@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
-    <file source-language="en" target-language="en" datatype="plaintext" original="messages" product-name="cyberimpact_sync">
+    <file source-language="en" target-language="fr" datatype="plaintext" original="messages" product-name="cyberimpact_sync">
         <body>
             <trans-unit id="importSchedulerTask.title" xml:space="preserve">
                 <source>Cyberimpact Import (Scan + Process + Finalize)</source>
+                <target>Import Cyberimpact (Scan + Traiter + Finaliser)</target>
             </trans-unit>
             <trans-unit id="importSchedulerTask.description" xml:space="preserve">
                 <source>Runs the complete import pipeline: scans for new files, processes pending chunks, and finalizes completed runs.</source>
+                <target>Exécute le pipeline d'import complet : scanne les nouveaux fichiers, traite les chunks en attente et finalise les runs complétés.</target>
             </trans-unit>
         </body>
     </file>
