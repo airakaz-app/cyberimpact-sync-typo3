@@ -314,128 +314,411 @@ final class SyncModuleController
     private function renderUploadForm(): string
     {
         return <<<'HTML'
-<!-- Section 1: Token Cyberimpact -->
-<div class="card" style="margin-bottom: 1.5rem; margin-top: 1rem;">
-    <div class="card-header">
-        <h3 style="margin: 0;">1) Token Cyberimpact (prioritaire)</h3>
+<style>
+.cyberimpact-container {
+    max-width: 1200px;
+    margin: 2rem 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.cyberimpact-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 3rem 2rem;
+    border-radius: 8px;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 10px 30px rgba(102, 126, 234, 0.15);
+}
+
+.cyberimpact-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.5px;
+}
+
+.cyberimpact-header p {
+    margin: 0;
+    opacity: 0.95;
+    font-size: 0.95rem;
+}
+
+.cyberimpact-section {
+    margin-bottom: 2.5rem;
+}
+
+.cyberimpact-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.cyberimpact-card:hover {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.cyberimpact-card-header {
+    background: linear-gradient(135deg, #f5f7fa 0%, #f0f4f8 100%);
+    border-bottom: 1px solid #e5e7eb;
+    padding: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.cyberimpact-card-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.cyberimpact-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.cyberimpact-card-body {
+    padding: 2rem;
+}
+
+.cyberimpact-form-group {
+    margin-bottom: 1.25rem;
+}
+
+.cyberimpact-form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 0.9rem;
+}
+
+.cyberimpact-form-control {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.cyberimpact-form-control:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.cyberimpact-btn {
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cyberimpact-btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.cyberimpact-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.cyberimpact-btn-secondary {
+    background: #f3f4f6;
+    color: #1f2937;
+    border: 1px solid #d1d5db;
+}
+
+.cyberimpact-btn-secondary:hover {
+    background: #e5e7eb;
+}
+
+.cyberimpact-btn-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.cyberimpact-btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+}
+
+.cyberimpact-alert {
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    border-left: 4px solid;
+    font-size: 0.9rem;
+}
+
+.cyberimpact-alert-success {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #065f46;
+}
+
+.cyberimpact-alert-danger {
+    background: #fef2f2;
+    border-color: #ef4444;
+    color: #7f1d1d;
+}
+
+.cyberimpact-alert-info {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1e40af;
+}
+
+.cyberimpact-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #6b7280;
+    font-size: 0.85rem;
+}
+
+.cyberimpact-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d1d5db;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.cyberimpact-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.cyberimpact-table thead tr {
+    background: #f9fafb;
+    border-bottom: 2px solid #e5e7eb;
+}
+
+.cyberimpact-table th {
+    padding: 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: #374151;
+}
+
+.cyberimpact-table td {
+    padding: 0.75rem;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.cyberimpact-table tbody tr:hover {
+    background: #f9fafb;
+}
+
+.cyberimpact-hint {
+    color: #6b7280;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+}
+
+.cyberimpact-status-badge {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    background: #ecfdf5;
+    color: #065f46;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.cyberimpact-hidden { display: none !important; }
+</style>
+
+<div class="cyberimpact-container">
+    <!-- Header -->
+    <div class="cyberimpact-header">
+        <h1>🚀 Cyberimpact Sync Pro</h1>
+        <p>Gérez vos imports de contacts avec simplicité et efficacité</p>
     </div>
-    <div class="card-body">
-        <form id="token_form" method="POST" style="max-width: 500px;">
-            <div class="form-group mb-3">
-                <label for="cyberimpact_token" class="form-label"><strong>Token API</strong></label>
-                <input type="password" class="form-control" id="cyberimpact_token" 
-                       name="cyberimpact_token" placeholder="Entrez votre token Cyberimpact"
-                       autocomplete="off">
+
+    <!-- Section 1: Token -->
+    <div class="cyberimpact-section">
+        <div class="cyberimpact-card">
+            <div class="cyberimpact-card-header">
+                <span class="cyberimpact-step-number">1</span>
+                <h3>Établir la connexion</h3>
             </div>
-            <div>
-                <button type="button" id="test_token_btn" class="btn btn-primary">Tester et sauvegarder</button>
-                <span id="token_loading" class="ms-2 d-none text-muted small">Vérification en cours…</span>
-            </div>
-        </form>
-        
-        <!-- Status du token si validé -->
-        <div id="token_status" style="margin-top: 1.5rem; display:none;">
-            <div class="alert alert-success mb-0">
-                <strong>✓ Token validé</strong><br>
-                Compte: <strong id="account_name"></strong><br>
-                Utilisateur: <em id="account_user"></em> (<em id="account_email"></em>)
+            <div class="cyberimpact-card-body">
+                <form id="token_form" method="POST">
+                    <div class="cyberimpact-form-group" style="max-width: 450px;">
+                        <label for="cyberimpact_token">Token API Cyberimpact</label>
+                        <input type="password" class="cyberimpact-form-control" id="cyberimpact_token" 
+                               name="cyberimpact_token" placeholder="Collez votre token API"
+                               autocomplete="off">
+                        <p class="cyberimpact-hint">Votre token de sécurité depuis Cyberimpact</p>
+                    </div>
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                        <button type="button" id="test_token_btn" class="cyberimpact-btn cyberimpact-btn-primary">
+                            ✓ Tester et sauvegarder
+                        </button>
+                        <span id="token_loading" class="cyberimpact-loading cyberimpact-hidden">
+                            <span class="cyberimpact-spinner"></span>
+                            Vérification en cours…
+                        </span>
+                    </div>
+                </form>
+                
+                <div id="token_status" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
+                    <div class="cyberimpact-alert cyberimpact-alert-success">
+                        <strong>✓ Connexion validée</strong><br>
+                        Compte: <strong id="account_name"></strong><br>
+                        Utilisateur: <em id="account_user"></em> (<em id="account_email"></em>)
+                    </div>
+                </div>
+                
+                <div id="token_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
             </div>
         </div>
-        
-        <div id="token_error" class="alert alert-danger mt-3" style="display:none;"></div>
     </div>
-</div>
 
-<!-- Section 2: Mapping des colonnes Excel -->
-<div class="card" style="margin-bottom: 1.5rem;">
-    <div class="card-header">
-        <h3 style="margin: 0;">2) Mapping des colonnes Excel</h3>
+    <!-- Section 2: Mapping -->
+    <div class="cyberimpact-section">
+        <div class="cyberimpact-card">
+            <div class="cyberimpact-card-header">
+                <span class="cyberimpact-step-number">2</span>
+                <h3>Configurer le mapping</h3>
+            </div>
+            <div class="cyberimpact-card-body">
+                <p class="cyberimpact-hint" style="margin-bottom: 1.5rem;">
+                    Associez les colonnes Excel aux champs Cyberimpact. La détection automatique est utilisée si vide.
+                </p>
+                
+                <button type="button" class="cyberimpact-btn cyberimpact-btn-secondary mb-3" id="load_fields_btn">
+                    ⬇ Charger les champs Cyberimpact
+                </button>
+                <span id="fields_loading" class="cyberimpact-loading cyberimpact-hidden ms-2">
+                    <span class="cyberimpact-spinner"></span>
+                    Chargement…
+                </span>
+                <div id="fields_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
+                
+                <form id="mapping_form" method="POST" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
+                    <div class="table-responsive" style="margin-bottom: 1.5rem;">
+                        <table class="cyberimpact-table">
+                            <thead>
+                                <tr>
+                                    <th>Champ Cyberimpact</th>
+                                    <th>Colonne Excel</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mapping_tbody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer mapping</button>
+                    <div style="display: flex; gap: 0.75rem;">
+                        <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer mapping</button>
+                        <button type="button" class="cyberimpact-btn cyberimpact-btn-secondary" id="clear_mapping_btn">Effacer</button>
+                    </div>
+                </form>
+                
+                <div id="mapping_empty_hint" class="cyberimpact-alert cyberimpact-alert-info">
+                    Cliquez sur "Charger les champs Cyberimpact" pour commencer.
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body">
-        <p class="text-muted small mb-3">
-            Définissez quelle colonne Excel correspond à quel champ Cyberimpact.
-            Laissez vide pour ne pas mapper un champ. Si aucun mapping n'est configuré, la détection automatique est utilisée.
-        </p>
-        
-        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="load_fields_btn">
-            ⬇ Charger les champs Cyberimpact
-        </button>
-        <span id="fields_loading" class="ms-2 d-none text-muted small">Chargement…</span>
-        <div id="fields_error" class="alert alert-danger mt-2" style="display:none;"></div>
-        
-        <form id="mapping_form" method="POST" style="display:none;">
-            <div class="table-responsive">
-                <table class="table table-sm" style="background: #f8f9fa;">
-                    <thead>
-                        <tr style="background: #e9ecef;">
-                            <th>Champ Cyberimpact</th>
-                            <th style="width: 300px;">Colonne Excel</th>
-                        </tr>
-                    </thead>
-                    <tbody id="mapping_tbody"></tbody>
-                </table>
+
+    <!-- Section 3: Groupe -->
+    <div class="cyberimpact-section">
+        <div class="cyberimpact-card">
+            <div class="cyberimpact-card-header">
+                <span class="cyberimpact-step-number">3</span>
+                <h3>Choisir un groupe cible</h3>
             </div>
-            
-            <div class="mt-3">
-                <button type="submit" class="btn btn-primary">Enregistrer mapping</button>
-                <button type="button" class="btn btn-outline-secondary" id="clear_mapping_btn">Effacer le mapping</button>
+            <div class="cyberimpact-card-body">
+                <p class="cyberimpact-hint" style="margin-bottom: 1.5rem;">
+                    Optionnel. Les contacts seront automatiquement ajoutés à ce groupe après l'import.
+                </p>
+                
+                <button type="button" class="cyberimpact-btn cyberimpact-btn-secondary mb-3" id="load_groups_btn">
+                    ⬇ Charger les groupes Cyberimpact
+                </button>
+                <span id="groups_loading" class="cyberimpact-loading cyberimpact-hidden ms-2">
+                    <span class="cyberimpact-spinner"></span>
+                    Chargement…
+                </span>
+                <div id="groups_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
+                
+                <form id="group_form" method="POST" style="margin-top: 1rem;">
+                    <div class="cyberimpact-form-group" style="max-width: 450px;">
+                        <label for="selected_group_id">Groupe cible</label>
+                        <select id="selected_group_id" name="selected_group_id" class="cyberimpact-form-control">
+                            <option value="">-- Sélectionner un groupe --</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer groupe</button>
+                </form>
             </div>
-        </form>
-        
-        <div id="mapping_empty_hint" class="alert alert-info mt-3">
-            Cliquez sur "Charger les champs Cyberimpact" pour commencer à configurer le mapping.
+        </div>
+    </div>
+
+    <!-- Section 4: Import -->
+    <div class="cyberimpact-section">
+        <div class="cyberimpact-card">
+            <div class="cyberimpact-card-header">
+                <span class="cyberimpact-step-number">4</span>
+                <h3>Importer votre fichier</h3>
+            </div>
+            <div class="cyberimpact-card-body">
+                <form method="post" enctype="multipart/form-data">
+                    <div class="cyberimpact-form-group" style="max-width: 450px;">
+                        <label for="source_file">Fichier Excel (.xlsx)</label>
+                        <input class="cyberimpact-form-control" type="file" id="source_file" 
+                               name="source_file" accept=".xlsx" required>
+                        <p class="cyberimpact-hint">Sélectionnez un fichier Excel à importer</p>
+                    </div>
+                    <button class="cyberimpact-btn cyberimpact-btn-success" type="submit">
+                        ⬆ Uploader et créer un run
+                    </button>
+                </form>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Section 3: Affectation à un groupe -->
-<div class="card" style="margin-bottom: 1.5rem;">
-    <div class="card-header">
-        <h3 style="margin: 0;">3) Affectation à un groupe Cyberimpact</h3>
-    </div>
-    <div class="card-body">
-        <p class="text-muted small mb-3">
-            Optionnel. Après l'import, les contacts créés/mis à jour seront ajoutés au groupe sélectionné.
-        </p>
-        
-        <button type="button" class="btn btn-outline-secondary btn-sm mb-3" id="load_groups_btn">
-            ⬇ Charger les groupes Cyberimpact
-        </button>
-        <span id="groups_loading" class="ms-2 d-none text-muted small">Chargement…</span>
-        <div id="groups_error" class="alert alert-danger mt-2" style="display:none;"></div>
-        
-        <form id="group_form" method="POST">
-            <div class="form-group" style="max-width: 500px;">
-                <label for="selected_group_id" class="form-label"><strong>Groupe cible</strong></label>
-                <select id="selected_group_id" name="selected_group_id" class="form-select">
-                    <option value="">-- Sélectionner un groupe --</option>
-                </select>
-            </div>
-            <button type="submit" class="btn btn-primary">Enregistrer groupe</button>
-        </form>
-    </div>
-</div>
-
-<!-- Section 4: Upload du fichier Excel -->
-<div class="card">
-    <div class="card-header">
-        <h3 style="margin: 0;">4) Importer un fichier Excel</h3>
-    </div>
-    <div class="card-body">
-        <form method="post" enctype="multipart/form-data" style="max-width: 640px;">
-            <div class="form-group mb-3">
-                <label for="source_file" class="form-label"><strong>Fichier Excel (.xlsx)</strong></label>
-                <input class="form-control" type="file" id="source_file" name="source_file" accept=".xlsx" required>
-                <div class="form-text">Le fichier sera traité avec le mapping et le groupe configurés ci-dessus.</div>
-            </div>
-            <button class="btn btn-success" type="submit">⬆ Uploader et créer un run</button>
-        </form>
-    </div>
-</div>
+<style>
+.mb-3 { margin-bottom: 1rem; }
+.ms-2 { margin-left: 0.5rem; }
+.mt-3 { margin-top: 1rem; }
+</style>
 
 <script>
 (function() {
-    const tokenForm = document.getElementById('token_form');
     const testTokenBtn = document.getElementById('test_token_btn');
     const tokenInput = document.getElementById('cyberimpact_token');
     const tokenLoading = document.getElementById('token_loading');
@@ -466,9 +749,9 @@ final class SyncModuleController
                 return;
             }
             
-            tokenLoading.classList.remove('d-none');
-            tokenError.style.display = 'none';
-            tokenStatus.style.display = 'none';
+            tokenLoading.classList.remove('cyberimpact-hidden');
+            tokenError.classList.add('cyberimpact-hidden');
+            tokenStatus.classList.add('cyberimpact-hidden');
             testTokenBtn.disabled = true;
             
             try {
@@ -487,18 +770,18 @@ final class SyncModuleController
                     document.getElementById('account_name').textContent = data.account || 'N/A';
                     document.getElementById('account_user').textContent = data.username || '-';
                     document.getElementById('account_email').textContent = data.email || '-';
-                    tokenStatus.style.display = 'block';
+                    tokenStatus.classList.remove('cyberimpact-hidden');
                     tokenInput.type = 'password';
                     tokenInput.value = '';
                 } else {
                     tokenError.textContent = data.error || 'Erreur inconnue';
-                    tokenError.style.display = 'block';
+                    tokenError.classList.remove('cyberimpact-hidden');
                 }
             } catch (err) {
                 tokenError.textContent = 'Erreur réseau: ' + err.message;
-                tokenError.style.display = 'block';
+                tokenError.classList.remove('cyberimpact-hidden');
             } finally {
-                tokenLoading.classList.add('d-none');
+                tokenLoading.classList.add('cyberimpact-hidden');
                 testTokenBtn.disabled = false;
             }
         });
@@ -508,8 +791,8 @@ final class SyncModuleController
     if (loadFieldsBtn) {
         loadFieldsBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            fieldsLoading.classList.remove('d-none');
-            fieldsError.style.display = 'none';
+            fieldsLoading.classList.remove('cyberimpact-hidden');
+            fieldsError.classList.add('cyberimpact-hidden');
             loadFieldsBtn.disabled = true;
             
             try {
@@ -520,7 +803,7 @@ final class SyncModuleController
                 
                 if (data.error) {
                     fieldsError.textContent = data.error;
-                    fieldsError.style.display = 'block';
+                    fieldsError.classList.remove('cyberimpact-hidden');
                     return;
                 }
                 
@@ -530,7 +813,7 @@ final class SyncModuleController
                 for (const [key, label] of Object.entries(data.standardFields)) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = '<td>' + label + '</td>' +
-                        '<td><input type="text" name="standard[' + key + ']" class="form-control form-control-sm" ' +
+                        '<td><input type="text" name="standard[' + key + ']" class="cyberimpact-form-control" ' +
                         'placeholder="Nom de la colonne Excel…"></td>';
                     mappingTbody.appendChild(tr);
                 }
@@ -539,18 +822,18 @@ final class SyncModuleController
                 for (const field of data.customFields) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = '<td>' + field.name + '</td>' +
-                        '<td><input type="text" name="customFields[' + field.id + ']" class="form-control form-control-sm" ' +
+                        '<td><input type="text" name="customFields[' + field.id + ']" class="cyberimpact-form-control" ' +
                         'placeholder="Nom de la colonne Excel…"></td>';
                     mappingTbody.appendChild(tr);
                 }
                 
-                mappingForm.style.display = 'block';
-                mappingEmptyHint.style.display = 'none';
+                mappingForm.classList.remove('cyberimpact-hidden');
+                mappingEmptyHint.classList.add('cyberimpact-hidden');
             } catch (err) {
                 fieldsError.textContent = 'Erreur réseau: ' + err.message;
-                fieldsError.style.display = 'block';
+                fieldsError.classList.remove('cyberimpact-hidden');
             } finally {
-                fieldsLoading.classList.add('d-none');
+                fieldsLoading.classList.add('cyberimpact-hidden');
                 loadFieldsBtn.disabled = false;
             }
         });
@@ -561,8 +844,8 @@ final class SyncModuleController
         clearMappingBtn.addEventListener('click', (e) => {
             e.preventDefault();
             mappingTbody.innerHTML = '';
-            mappingForm.style.display = 'none';
-            mappingEmptyHint.style.display = 'block';
+            mappingForm.classList.add('cyberimpact-hidden');
+            mappingEmptyHint.classList.remove('cyberimpact-hidden');
         });
     }
 
@@ -570,8 +853,8 @@ final class SyncModuleController
     if (loadGroupsBtn) {
         loadGroupsBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            groupsLoading.classList.remove('d-none');
-            groupsError.style.display = 'none';
+            groupsLoading.classList.remove('cyberimpact-hidden');
+            groupsError.classList.add('cyberimpact-hidden');
             loadGroupsBtn.disabled = true;
             
             try {
@@ -582,7 +865,7 @@ final class SyncModuleController
                 
                 if (data.error) {
                     groupsError.textContent = data.error;
-                    groupsError.style.display = 'block';
+                    groupsError.classList.remove('cyberimpact-hidden');
                     return;
                 }
                 
@@ -595,9 +878,9 @@ final class SyncModuleController
                 }
             } catch (err) {
                 groupsError.textContent = 'Erreur réseau: ' + err.message;
-                groupsError.style.display = 'block';
+                groupsError.classList.remove('cyberimpact-hidden');
             } finally {
-                groupsLoading.classList.add('d-none');
+                groupsLoading.classList.add('cyberimpact-hidden');
                 loadGroupsBtn.disabled = false;
             }
         });
@@ -663,28 +946,6 @@ final class SyncModuleController
     }
 })();
 </script>
-
-<style>
-.card {
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
-}
-.card-header {
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #ddd;
-    padding: 0.75rem 1.25rem;
-}
-.card-body {
-    padding: 1.25rem;
-}
-.d-none {
-    display: none;
-}
-.ms-2 {
-    margin-left: 0.5rem;
-}
-</style>
 HTML;
     }
 
