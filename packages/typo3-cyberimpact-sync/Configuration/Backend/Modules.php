@@ -31,6 +31,9 @@ return [
             'selected-group' => [
                 'target' => SyncModuleController::class . '::saveSelectedGroup',
             ],
+            'exact-sync-settings' => [
+                'target' => SyncModuleController::class . '::saveExactSyncSettings',
+            ],
         ],
     ],
 ];

@@ -36,6 +36,7 @@ final class SyncModuleController
 
         $queryParams = $request->getQueryParams();
         $content = implode('', $flashMessages) . $this->renderUploadForm();
+        $content .= $this->renderExactSyncSettings();
         $content .= $this->renderRunsList();
 
         $runUid = (int)($queryParams['run'] ?? 0);
@@ -221,6 +222,43 @@ final class SyncModuleController
                 'message' => $groupId === null
                     ? 'Groupe supprimé'
                     : 'Groupe Cyberimpact sauvegardé',
+            ]);
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'ok' => false,
+                'error' => 'Erreur lors de la sauvegarde: ' . $e->getMessage(),
+            ], 502);
+        }
+    }
+
+    /**
+     * Sauvegarde l'action exactSync pour les contacts manquants (unsubscribe ou delete).
+     */
+    public function saveExactSyncSettings(ServerRequestInterface $request): ResponseInterface
+    {
+        if (strtoupper($request->getMethod()) !== 'POST') {
+            return new JsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        try {
+            $parsedBody = $request->getParsedBody();
+            $action = trim((string)($parsedBody['missing_contacts_action'] ?? 'unsubscribe'));
+
+            if (!in_array($action, ['unsubscribe', 'delete'], true)) {
+                return new JsonResponse([
+                    'ok' => false,
+                    'error' => 'Action invalide. Valeurs acceptées: unsubscribe, delete',
+                ], 400);
+            }
+
+            $settings = ImportSettingsRepository::make()->findFirst();
+            $settings->setMissingContactsAction($action);
+            ImportSettingsRepository::make()->update($settings);
+
+            return new JsonResponse([
+                'ok' => true,
+                'message' => 'Paramètre de synchronisation exacte sauvegardé',
+                'action' => $action,
             ]);
         } catch (\Throwable $e) {
             return new JsonResponse([
@@ -943,6 +981,113 @@ final class SyncModuleController
                 alert('Erreur réseau: ' + err.message);
             }
         });
+    }
+})();
+</script>
+HTML;
+    }
+
+    private function renderExactSyncSettings(): string
+    {
+        try {
+            $settings = ImportSettingsRepository::make()->findFirst();
+            $currentAction = $settings->getMissingContactsAction();
+        } catch (\Throwable) {
+            $currentAction = 'unsubscribe';
+        }
+
+        return <<<'HTML'
+<div class="cyberimpact-section">
+    <div class="cyberimpact-card">
+        <div class="cyberimpact-card-header">
+            <span class="cyberimpact-step-number">⚙</span>
+            <h3>Paramètres d'exactSync</h3>
+        </div>
+        <div class="cyberimpact-card-body">
+            <p style="margin: 0 0 1.5rem; color: #6b7280; font-size: 0.95rem;">
+                Définissez l'action à appliquer aux contacts manquants lors de la synchronisation exacte.
+            </p>
+            <form id="exactSyncForm" style="display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                <div style="display: flex; gap: 1rem; flex: 1; min-width: 300px;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+                        <input type="radio" name="missing_contacts_action" value="unsubscribe" style="cursor: pointer;" 
+                               id="action-unsubscribe" /> Désabonner
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
+                        <input type="radio" name="missing_contacts_action" value="delete" style="cursor: pointer;" 
+                               id="action-delete" /> Supprimer
+                    </label>
+                </div>
+                <button type="button" class="cyberimpact-btn cyberimpact-btn-primary" id="saveExactSyncBtn">
+                    Sauvegarder
+                </button>
+            </form>
+            <div id="exactSyncMessage" style="margin-top: 1rem; display: none; padding: 1rem; border-radius: 8px;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const currentAction = '
+HTML
+        . htmlspecialchars($currentAction)
+        . <<<'HTML'
+';
+    const form = document.getElementById('exactSyncForm');
+    const unsubscribeRadio = document.getElementById('action-unsubscribe');
+    const deleteRadio = document.getElementById('action-delete');
+    const saveBtn = document.getElementById('saveExactSyncBtn');
+    const messageDiv = document.getElementById('exactSyncMessage');
+
+    // Initialiser la sélection
+    if (currentAction === 'delete') {
+        deleteRadio.checked = true;
+    } else {
+        unsubscribeRadio.checked = true;
+    }
+
+    saveBtn.addEventListener('click', async function() {
+        const action = document.querySelector('input[name="missing_contacts_action"]:checked')?.value;
+        if (!action) {
+            showMessage('Veuillez sélectionner une action', 'danger');
+            return;
+        }
+
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Sauvegarde...';
+
+        try {
+            const response = await fetch(window.location.pathname + '?route=exact-sync-settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: 'missing_contacts_action=' + encodeURIComponent(action),
+            });
+
+            const result = await response.json();
+
+            if (result.ok) {
+                showMessage('✓ ' + result.message, 'success');
+            } else {
+                showMessage('✗ ' + (result.error || 'Erreur inconnue'), 'danger');
+            }
+        } catch (error) {
+            showMessage('✗ Erreur réseau: ' + error.message, 'danger');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Sauvegarder';
+        }
+    });
+
+    function showMessage(text, type) {
+        messageDiv.textContent = text;
+        messageDiv.style.display = 'block';
+        messageDiv.style.background = type === 'success' ? '#d1fae5' : '#fee2e2';
+        messageDiv.style.color = type === 'success' ? '#065f46' : '#991b1b';
+        messageDiv.style.borderLeft = '4px solid ' + (type === 'success' ? '#10b981' : '#ef4444');
     }
 })();
 </script>

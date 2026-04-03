@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cyberimpact\CyberimpactSync\Service\Run;
 
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
+use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Service\Cyberimpact\CyberimpactClient;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
@@ -30,10 +31,8 @@ final class ExactSyncService
             return ['planned' => 0, 'done' => 0, 'failed' => 0, 'message' => 'Invalid run UID.'];
         }
 
-        $settings = $this->getSettings();
-        $action = in_array(($settings['exactSyncMissingContactsAction'] ?? 'unsubscribe'), ['unsubscribe', 'delete'], true)
-            ? (string)$settings['exactSyncMissingContactsAction']
-            : 'unsubscribe';
+        // Lire depuis la BD en priorité, fallback sur la configuration d'extension
+        $action = $this->getMissingContactsAction();
 
         $chunks = $this->chunkStorage->findChunksByRunUid($runUid);
         $localEmails = $this->extractLocalEmails($chunks);
@@ -109,6 +108,38 @@ final class ExactSyncService
         }
 
         return array_values($emails);
+    }
+
+    /**
+     * Récupère l'action exactSync pour les contacts manquants.
+     * Priorité: BD > Configuration d'extension > Défaut 'unsubscribe'
+     */
+    private function getMissingContactsAction(): string
+    {
+        try {
+            // Essayer de lire depuis la BD
+            $settings = ImportSettingsRepository::make()->findFirst();
+            $bdAction = $settings->getMissingContactsAction();
+            if (!empty($bdAction) && in_array($bdAction, ['unsubscribe', 'delete'], true)) {
+                return $bdAction;
+            }
+        } catch (\Throwable) {
+            // Continuer au fallback
+        }
+
+        // Fallback: Configuration d'extension
+        try {
+            $settings = $this->extensionConfiguration->get('cyberimpact_sync');
+            $configAction = $settings['exactSyncMissingContactsAction'] ?? null;
+            if (!empty($configAction) && in_array($configAction, ['unsubscribe', 'delete'], true)) {
+                return (string)$configAction;
+            }
+        } catch (\Throwable) {
+            // Continuer au défaut
+        }
+
+        // Défaut
+        return 'unsubscribe';
     }
 
     /**
