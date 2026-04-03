@@ -1,0 +1,28 @@
+services:
+  _defaults:
+    autowire: true
+    autoconfigure: true
+    public: false
+
+  Cyberimpact\CyberimpactSync\:
+    resource: '../Classes/*'
+
+  Cyberimpact\CyberimpactSync\Command\CheckConnectionCommand:
+    tags:
+      - name: 'console.command'
+        command: 'cyberimpact:check-connection'
+
+  Cyberimpact\CyberimpactSync\Command\ScanImportFolderCommand:
+    tags:
+      - name: 'console.command'
+        command: 'cyberimpact:scan-import-folder'
+
+  Cyberimpact\CyberimpactSync\Command\ProcessNextRunCommand:
+    tags:
+      - name: 'console.command'
+        command: 'cyberimpact:process-next-run'
+
+  Cyberimpact\CyberimpactSync\Command\FinalizeRunCommand:
+    tags:
+      - name: 'console.command'
+        command: 'cyberimpact:finalize-run'

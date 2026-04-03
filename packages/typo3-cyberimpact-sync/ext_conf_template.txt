@@ -1,0 +1,52 @@
+# cat=cyberimpact_sync/base; type=int+; label=FAL Storage UID
+falStorageUid = 1
+
+# cat=cyberimpact_sync/base; type=string; label=Incoming folder in FAL storage
+incomingFolder = incoming/
+
+# cat=cyberimpact_sync/base; type=boolean; label=Dry-run by default for auto-queued runs
+dryRunDefault = 1
+
+# cat=cyberimpact_sync/api; type=string; label=Cyberimpact API base URL
+apiBaseUrl = https://api.cyberimpact.com
+
+# cat=cyberimpact_sync/api; type=int+; label=Cyberimpact API timeout (seconds)
+apiTimeout = 15
+
+# cat=cyberimpact_sync/api; type=string; label=Cyberimpact API token (prefer env CYBERIMPACT_TOKEN)
+apiToken =
+
+# cat=cyberimpact_sync/exactsync; type=boolean; label=Exact-sync: require manual confirmation before finalization
+exactSyncRequireConfirmation = 1
+
+# cat=cyberimpact_sync/exactsync; type=int+; label=Exact-sync: max unsubscribe/delete allowed in a run
+exactSyncMaxUnsubscribeCount = 1000
+
+# cat=cyberimpact_sync/base; type=string; label=Reports folder in FAL storage
+reportsFolder = reports/
+
+
+# cat=cyberimpact_sync/base; type=int+; label=Chunk size for automatic scan->prepare
+chunkSize = 500
+
+# cat=cyberimpact_sync/exactsync; type=options[unsubscribe=unsubscribe,delete=delete]; label=Exact-sync action for missing contacts
+exactSyncMissingContactsAction = unsubscribe
+
+# cat=cyberimpact_sync/api; type=int+; label=API max retry attempts
+apiRetryMaxAttempts = 3
+
+# cat=cyberimpact_sync/api; type=int+; label=API initial retry delay (ms)
+apiRetryInitialDelayMs = 250
+
+# cat=cyberimpact_sync/base; type=int+; label=Requeue stale processing chunks after (seconds)
+staleChunkTimeoutSeconds = 900
+
+
+# cat=cyberimpact_sync/api; type=int+; label=Batch poll max attempts
+batchPollMaxAttempts = 30
+
+# cat=cyberimpact_sync/api; type=int+; label=Batch poll interval (ms)
+batchPollIntervalMs = 1000
+
+# cat=cyberimpact_sync/api; type=int+; label=Batch poll initial delay (ms)
+batchPollInitialDelayMs = 1000
