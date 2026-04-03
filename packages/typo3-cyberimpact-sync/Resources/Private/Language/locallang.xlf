@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" version="1.2">
+  <file source-language="en" target-language="fr" datatype="plaintext" original="EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf">
+    <header/>
+    <body>
+      <!-- Base Configuration -->
+      <trans-unit id="ext_conf_template.falStorageUid.label">
+        <source>FAL Storage UID</source>
+        <target>UID du stockage FAL</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.falStorageUid.description">
+        <source>Identifier of the TYPO3 file storage (File Abstraction Layer) where Excel files will be imported. Usually 1 for the default storage.</source>
+        <target>Identifiant du stockage de fichiers TYPO3 (File Abstraction Layer) où seront stockés les fichiers Excel à importer. Généralement 1 pour le stockage par défaut.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.incomingFolder.label">
+        <source>Incoming folder in FAL storage</source>
+        <target>Dossier des fichiers entrants</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.incomingFolder.description">
+        <source>Path of the folder in FAL storage where Excel files to import will be placed. Example: incoming/ or imports/</source>
+        <target>Chemin du dossier dans le stockage FAL où les fichiers Excel à importer seront déposés. Exemple: incoming/ ou imports/</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.dryRunDefault.label">
+        <source>Dry-run by default for auto-queued runs</source>
+        <target>Mode test par défaut</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.dryRunDefault.description">
+        <source>If enabled, automatically created runs execute in test mode (dry-run) without modifying data in Cyberimpact. Enable this parameter for testing before production.</source>
+        <target>Si activé, les runs créés automatiquement s'exécutent en mode test (dry-run) sans modifier les données dans Cyberimpact. Activez ce paramètre pour tester avant production.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.reportsFolder.label">
+        <source>Reports folder in FAL storage</source>
+        <target>Dossier des rapports</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.reportsFolder.description">
+        <source>Path of the folder in FAL storage where report files (CSV/Excel) will be saved after each run. Example: reports/ or logs/</source>
+        <target>Chemin du dossier dans le stockage FAL où les fichiers de rapport (CSV/Excel) seront sauvegardés après chaque run. Exemple: reports/ ou logs/</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.chunkSize.label">
+        <source>Chunk size for automatic scan->prepare</source>
+        <target>Taille des chunks de traitement</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.chunkSize.description">
+        <source>Number of lines per chunk when processing Excel files. Larger values mean fewer API requests but higher memory consumption. Recommended value: 500-1000.</source>
+        <target>Nombre de lignes par chunk lors du traitement des fichiers Excel. Plus la valeur est grande, moins il y a de requêtes API, mais plus la mémoire est consommée. Valeur recommandée: 500-1000.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.staleChunkTimeoutSeconds.label">
+        <source>Requeue stale processing chunks after (seconds)</source>
+        <target>Timeout des chunks bloqués (secondes)</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.staleChunkTimeoutSeconds.description">
+        <source>Delay (in seconds) before requeuing a chunk that appears stuck during processing. Chunks inactive longer than this value will be restarted. Recommended value: 900 (15 minutes).</source>
+        <target>Délai (en secondes) avant de reconquêter un chunk qui semble bloqué en cours de traitement. Les chunks inactifs plus longtemps que cette valeur seront relancés. Valeur recommandée: 900 (15 minutes).</target>
+      </trans-unit>
+
+      <!-- API Configuration -->
+      <trans-unit id="ext_conf_template.apiBaseUrl.label">
+        <source>Cyberimpact API base URL</source>
+        <target>URL de base de l'API Cyberimpact</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.apiBaseUrl.description">
+        <source>Base address of the Cyberimpact API. Do not modify unless you are using a custom instance.</source>
+        <target>Adresse de base de l'API Cyberimpact. Ne pas modifier sauf si vous utilisez une instance personnalisée.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.apiTimeout.label">
+        <source>Cyberimpact API timeout (seconds)</source>
+        <target>Délai d'attente API (secondes)</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.apiTimeout.description">
+        <source>Maximum delay (in seconds) to wait for a response from the Cyberimpact API before considering the request failed. Recommended value: 15-30 seconds.</source>
+        <target>Délai maximum (en secondes) pour attendre une réponse de l'API Cyberimpact avant de considérer la requête comme échouée. Valeur recommandée: 15-30 secondes.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.apiToken.label">
+        <source>Cyberimpact API token (prefer env CYBERIMPACT_TOKEN)</source>
+        <target>Token API Cyberimpact</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.apiToken.description">
+        <source>Secret key to authenticate calls to the Cyberimpact API. For better security, prefer using the CYBERIMPACT_TOKEN environment variable instead of filling in this field.</source>
+        <target>Clé secrète pour authentifier les appels à l'API Cyberimpact. Pour plus de sécurité, préférez l'utilisation de la variable d'environnement CYBERIMPACT_TOKEN plutôt que de remplir ce champ.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.apiRetryMaxAttempts.label">
+        <source>API max retry attempts</source>
+        <target>Nombre maximum de tentatives API</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.apiRetryMaxAttempts.description">
+        <source>Maximum number of retries for a failed API request before abandoning it. Retries increase exponentially the delay between each call. Recommended value: 3-5.</source>
+        <target>Nombre maximal de tentatives pour une requête API échouée avant de l'abandonner. Les tentatives augmentent exponentiellement le délai entre chaque appel. Valeur recommandée: 3-5.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.apiRetryInitialDelayMs.label">
+        <source>API initial retry delay (ms)</source>
+        <target>Délai initial de retry (ms)</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.apiRetryInitialDelayMs.description">
+        <source>Initial delay (in milliseconds) before the first retry attempt of a failed request. The delay doubles with each new attempt (exponential back-off). Recommended value: 250-500.</source>
+        <target>Délai initial (en millisecondes) avant la première tentative de réessai d'une requête échouée. Le délai double à chaque nouvelle tentative (back-off exponentiel). Valeur recommandée: 250-500.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.batchPollMaxAttempts.label">
+        <source>Batch poll max attempts</source>
+        <target>Nombre maximal de polls</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.batchPollMaxAttempts.description">
+        <source>Maximum number of times the system will query the Cyberimpact API to check the status of a processing job before abandoning it. Each poll is spaced by the delay configured below.</source>
+        <target>Nombre maximum de fois que le système interrogera l'API Cyberimpact pour vérifier l'état d'une tâche en cours de traitement avant d'abandonner. Chaque poll est espacé par le délai configuré ci-dessous.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.batchPollIntervalMs.label">
+        <source>Batch poll interval (ms)</source>
+        <target>Intervalle de vérification (ms)</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.batchPollIntervalMs.description">
+        <source>Delay (in milliseconds) between two checks of the status of a task via the API. Recommended value: 1000-2000. Too low a value will overload the API.</source>
+        <target>Délai (en millisecondes) entre deux vérifications de l'état d'une tâche via l'API. Valeur recommandée: 1000-2000. Valeur trop basse surcharge l'API.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.batchPollInitialDelayMs.label">
+        <source>Batch poll initial delay (ms)</source>
+        <target>Délai initial avant première vérification (ms)</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.batchPollInitialDelayMs.description">
+        <source>Delay (in milliseconds) before the first status check of a task. Allows the Cyberimpact API to start processing before we start querying it. Recommended value: 1000-2000.</source>
+        <target>Délai (en millisecondes) avant la première vérification de l'état d'une tâche. Permet à l'API Cyberimpact de commencer le traitement avant que nous commencions à l'interroger. Valeur recommandée: 1000-2000.</target>
+      </trans-unit>
+
+      <!-- Exact-sync Configuration -->
+      <trans-unit id="ext_conf_template.exactSyncRequireConfirmation.label">
+        <source>Exact-sync: require manual confirmation before finalization</source>
+        <target>Exiger confirmation manuelle (Exact-sync)</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.exactSyncRequireConfirmation.description">
+        <source>If enabled, sensitive data (deletion/unsubscription) requires manual confirmation before being applied to Cyberimpact. Recommended for production.</source>
+        <target>Si activé, les données sensibles (suppression/désinscription) requièrent une confirmation manuelle avant d'être appliquées à Cyberimpact. Recommandé pour la production.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.exactSyncMaxUnsubscribeCount.label">
+        <source>Exact-sync: max unsubscribe/delete allowed in a run</source>
+        <target>Maximum de désinscriptions autorisées</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.exactSyncMaxUnsubscribeCount.description">
+        <source>Maximum number of unsubscriptions or deletions allowed in a single run. Security limit to prevent accidental mass modifications. Recommended value: 1000-5000.</source>
+        <target>Nombre maximum de désinscriptions ou suppressions autorisées dans un seul run. Limite de sécurité pour éviter les modifications massives accidentelles. Valeur recommandée: 1000-5000.</target>
+      </trans-unit>
+
+      <trans-unit id="ext_conf_template.exactSyncMissingContactsAction.label">
+        <source>Exact-sync action for missing contacts</source>
+        <target>Action pour les contacts manquants</target>
+      </trans-unit>
+      <trans-unit id="ext_conf_template.exactSyncMissingContactsAction.description">
+        <source>Action to apply to contacts present in Cyberimpact but absent from the Excel file during an exact sync. Choose between: unsubscribe (unsubscribe) or delete (delete).</source>
+        <target>Action à appliquer aux contacts présents dans Cyberimpact mais absents du fichier Excel lors d'une synchronisation exacte. Choisir entre: unsubscribe (désinscrire) ou delete (supprimer).</target>
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

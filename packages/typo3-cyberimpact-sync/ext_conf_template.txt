@@ -1,52 +1,67 @@
-# cat=cyberimpact_sync/base; type=int+; label=FAL Storage UID
+# cat=cyberimpact_sync/base; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.falStorageUid.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.falStorageUid.description
 falStorageUid = 1
 
-# cat=cyberimpact_sync/base; type=string; label=Incoming folder in FAL storage
+# cat=cyberimpact_sync/base; type=string; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.incomingFolder.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.incomingFolder.description
 incomingFolder = incoming/
 
-# cat=cyberimpact_sync/base; type=boolean; label=Dry-run by default for auto-queued runs
+# cat=cyberimpact_sync/base; type=boolean; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.dryRunDefault.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.dryRunDefault.description
 dryRunDefault = 1
 
-# cat=cyberimpact_sync/api; type=string; label=Cyberimpact API base URL
+# cat=cyberimpact_sync/api; type=string; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiBaseUrl.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiBaseUrl.description
 apiBaseUrl = https://api.cyberimpact.com
 
-# cat=cyberimpact_sync/api; type=int+; label=Cyberimpact API timeout (seconds)
+# cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiTimeout.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiTimeout.description
 apiTimeout = 15
 
-# cat=cyberimpact_sync/api; type=string; label=Cyberimpact API token (prefer env CYBERIMPACT_TOKEN)
+# cat=cyberimpact_sync/api; type=string; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiToken.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiToken.description
 apiToken =
 
-# cat=cyberimpact_sync/exactsync; type=boolean; label=Exact-sync: require manual confirmation before finalization
+# cat=cyberimpact_sync/exactsync; type=boolean; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.exactSyncRequireConfirmation.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.exactSyncRequireConfirmation.description
 exactSyncRequireConfirmation = 1
 
-# cat=cyberimpact_sync/exactsync; type=int+; label=Exact-sync: max unsubscribe/delete allowed in a run
+# cat=cyberimpact_sync/exactsync; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.exactSyncMaxUnsubscribeCount.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.exactSyncMaxUnsubscribeCount.description
 exactSyncMaxUnsubscribeCount = 1000
 
-# cat=cyberimpact_sync/base; type=string; label=Reports folder in FAL storage
+# cat=cyberimpact_sync/base; type=string; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.reportsFolder.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.reportsFolder.description
 reportsFolder = reports/
 
-
-# cat=cyberimpact_sync/base; type=int+; label=Chunk size for automatic scan->prepare
+# cat=cyberimpact_sync/base; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.chunkSize.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.chunkSize.description
 chunkSize = 500
 
-# cat=cyberimpact_sync/exactsync; type=options[unsubscribe=unsubscribe,delete=delete]; label=Exact-sync action for missing contacts
+# cat=cyberimpact_sync/exactsync; type=options[unsubscribe=unsubscribe,delete=delete]; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.exactSyncMissingContactsAction.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.exactSyncMissingContactsAction.description
 exactSyncMissingContactsAction = unsubscribe
 
-# cat=cyberimpact_sync/api; type=int+; label=API max retry attempts
+# cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiRetryMaxAttempts.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiRetryMaxAttempts.description
 apiRetryMaxAttempts = 3
 
-# cat=cyberimpact_sync/api; type=int+; label=API initial retry delay (ms)
+# cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiRetryInitialDelayMs.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiRetryInitialDelayMs.description
 apiRetryInitialDelayMs = 250
 
-# cat=cyberimpact_sync/base; type=int+; label=Requeue stale processing chunks after (seconds)
+# cat=cyberimpact_sync/base; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.staleChunkTimeoutSeconds.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.staleChunkTimeoutSeconds.description
 staleChunkTimeoutSeconds = 900
 
-
-# cat=cyberimpact_sync/api; type=int+; label=Batch poll max attempts
+# cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollMaxAttempts.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollMaxAttempts.description
 batchPollMaxAttempts = 30
 
-# cat=cyberimpact_sync/api; type=int+; label=Batch poll interval (ms)
+# cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollIntervalMs.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollIntervalMs.description
 batchPollIntervalMs = 1000
 
-# cat=cyberimpact_sync/api; type=int+; label=Batch poll initial delay (ms)
+# cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollInitialDelayMs.label
+# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollInitialDelayMs.description
 batchPollInitialDelayMs = 1000
