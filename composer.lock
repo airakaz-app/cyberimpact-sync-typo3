@@ -199,7 +199,7 @@
         },
         {
             "name": "cyberimpact/cyberimpact-sync",
-            "version": "dev-main",
+            "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "./packages/typo3-cyberimpact-sync",
