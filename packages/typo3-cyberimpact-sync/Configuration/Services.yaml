@@ -10,24 +10,24 @@ services:
   Cyberimpact\CyberimpactSync\Command\CheckConnectionCommand:
     tags:
       - name: 'console.command'
-        command: 'cyberimpact:check-connection'
+        command: 'cyberimpact:verifier-connexion'
 
   Cyberimpact\CyberimpactSync\Command\ScanImportFolderCommand:
     tags:
       - name: 'console.command'
-        command: 'cyberimpact:scan-import-folder'
+        command: 'cyberimpact:scanner-dossier'
 
   Cyberimpact\CyberimpactSync\Command\ProcessNextRunCommand:
     tags:
       - name: 'console.command'
-        command: 'cyberimpact:process-next-run'
+        command: 'cyberimpact:traiter-chunk'
 
   Cyberimpact\CyberimpactSync\Command\FinalizeRunCommand:
     tags:
       - name: 'console.command'
-        command: 'cyberimpact:finalize-run'
+        command: 'cyberimpact:finaliser-run'
 
   Cyberimpact\CyberimpactSync\Command\RunFullImportCommand:
     tags:
       - name: 'console.command'
-        command: 'cyberimpact:run-full-import'
+        command: 'cyberimpact:import-complet'
