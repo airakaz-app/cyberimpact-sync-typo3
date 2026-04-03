@@ -26,3 +26,8 @@ services:
     tags:
       - name: 'console.command'
         command: 'cyberimpact:finalize-run'
+
+  Cyberimpact\CyberimpactSync\Command\RunFullImportCommand:
+    tags:
+      - name: 'console.command'
+        command: 'cyberimpact:run-full-import'
