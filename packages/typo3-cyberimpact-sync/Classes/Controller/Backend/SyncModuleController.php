@@ -15,9 +15,9 @@ use Cyberimpact\CyberimpactSync\Service\Run\RunManager;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Routing\UriBuilder;
-use TYPO3\CMS\Backend\Template\ModuleTemplateFactory;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Database\ConnectionPool;
+use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -26,9 +26,6 @@ final class SyncModuleController
 {
     public function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
-        $moduleTemplate = $this->moduleTemplateFactory()->create($request);
-        $moduleTemplate->setTitle('Cyberimpact Sync');
-
         $flashMessages = [];
         if (strtoupper($request->getMethod()) === 'POST') {
             $flashMessages[] = $this->handleUpload($request);
@@ -55,14 +52,7 @@ final class SyncModuleController
             $content .= $this->renderRunDetail($runUid);
         }
 
-        $moduleTemplate->setContent($content);
-
-        // Register the JavaScript file
-        $pageRenderer = $moduleTemplate->getPageRenderer();
-        $publicPath = '/typo3conf/ext/cyberimpact_sync/Resources/Public/JavaScript/sync-module.js';
-        $pageRenderer->addJsFile($publicPath);
-
-        return $moduleTemplate->renderResponse();
+        return new HtmlResponse($content);
     }
 
     /**
@@ -640,7 +630,7 @@ final class SyncModuleController
                 <h3>Établir la connexion</h3>
             </div>
             <div class="cyberimpact-card-body">
-                <form id="token_form" method="POST">
+                <form id="token_form" onsubmit="return false;">
                     <div class="cyberimpact-form-group" style="max-width: 450px;">
                         <label for="cyberimpact_token">Token API Cyberimpact</label>
                         <input type="password" class="cyberimpact-form-control" id="cyberimpact_token" 
@@ -693,7 +683,7 @@ final class SyncModuleController
                 </span>
                 <div id="fields_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
                 
-                <form id="mapping_form" method="POST" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
+                <form id="mapping_form" onsubmit="return false;" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
                     <div class="table-responsive" style="margin-bottom: 1.5rem;">
                         <table class="cyberimpact-table">
                             <thead>
@@ -741,7 +731,7 @@ final class SyncModuleController
                 </span>
                 <div id="groups_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
                 
-                <form id="group_form" method="POST" style="margin-top: 1rem;">
+                <form id="group_form" onsubmit="return false;" style="margin-top: 1rem;">
                     <div class="cyberimpact-form-group" style="max-width: 450px;">
                         <label for="selected_group_id">Groupe cible</label>
                         <select id="selected_group_id" name="selected_group_id" class="cyberimpact-form-control">
@@ -967,10 +957,7 @@ HTML;
         ];
     }
 
-    private function moduleTemplateFactory(): ModuleTemplateFactory
-    {
-        return GeneralUtility::makeInstance(ModuleTemplateFactory::class);
-    }
+
 
     private function extensionConfiguration(): ExtensionConfiguration
     {

@@ -1,0 +1,2 @@
+# Cyberimpact Sync Extension - Constants
+# (Leave empty if no constants needed)

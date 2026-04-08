@@ -1,0 +1,3 @@
+page.includeJS {
+    sync-module = EXT:cyberimpact_sync/Resources/Public/JavaScript/sync-module.js
+}

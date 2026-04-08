@@ -3,7 +3,9 @@
  * TYPO3 v12 compatible
  */
 
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
+
+    alert('test22555');
     // Get API URLs from data attributes on main container
     const mainContainer = document.getElementById('cyberimpact-module-container');
     if (!mainContainer) return;
@@ -327,4 +329,4 @@ document.addEventListener('DOMContentLoaded', function() {
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
     }
-});
+})();
