@@ -18,7 +18,6 @@ use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Backend\Template\ModuleTemplateFactory;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Database\ConnectionPool;
-use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -35,9 +34,20 @@ final class SyncModuleController
             $flashMessages[] = $this->handleUpload($request);
         }
 
+        // Build API URLs using UriBuilder
+        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
+        $apiUrls = [
+            'testToken' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'test-token']),
+            'cyberimpactFields' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'cyberimpact-fields']),
+            'cyberimpactGroups' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'cyberimpact-groups']),
+            'columnMapping' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'column-mapping']),
+            'selectedGroup' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'selected-group']),
+            'exactSyncSettings' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'exact-sync-settings']),
+        ];
+
         $queryParams = $request->getQueryParams();
-        $content = implode('', $flashMessages) . $this->renderUploadForm();
-        $content .= $this->renderExactSyncSettings();
+        $content = implode('', $flashMessages) . $this->renderUploadForm($apiUrls);
+        $content .= $this->renderExactSyncSettings($apiUrls);
         $content .= $this->renderRunsList();
 
         $runUid = (int)($queryParams['run'] ?? 0);
@@ -45,7 +55,14 @@ final class SyncModuleController
             $content .= $this->renderRunDetail($runUid);
         }
 
-        return new HtmlResponse($content);
+        $moduleTemplate->setContent($content);
+
+        // Register the JavaScript file
+        $pageRenderer = $moduleTemplate->getPageRenderer();
+        $publicPath = '/typo3conf/ext/cyberimpact_sync/Resources/Public/JavaScript/sync-module.js';
+        $pageRenderer->addJsFile($publicPath);
+
+        return $moduleTemplate->renderResponse();
     }
 
     /**
@@ -350,9 +367,19 @@ final class SyncModuleController
         }
     }
 
-    private function renderUploadForm(): string
+    private function renderUploadForm(array $apiUrls = []): string
     {
-        return <<<'HTML'
+        $dataAttrs = '';
+        if (!empty($apiUrls)) {
+            $dataAttrs = ' data-url-test-token="' . htmlspecialchars($apiUrls['testToken'] ?? '') . '"'
+                . ' data-url-cyberimpact-fields="' . htmlspecialchars($apiUrls['cyberimpactFields'] ?? '') . '"'
+                . ' data-url-cyberimpact-groups="' . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
+                . ' data-url-column-mapping="' . htmlspecialchars($apiUrls['columnMapping'] ?? '') . '"'
+                . ' data-url-selected-group="' . htmlspecialchars($apiUrls['selectedGroup'] ?? '') . '"'
+                . ' data-url-exact-sync-settings="' . htmlspecialchars($apiUrls['exactSyncSettings'] ?? '') . '"';
+        }
+
+        return <<<HTML
 <style>
 .cyberimpact-container {
     max-width: 1200px;
@@ -597,12 +624,13 @@ final class SyncModuleController
 .cyberimpact-hidden { display: none !important; }
 </style>
 
-<div class="cyberimpact-container">
+<div id="cyberimpact-module-container"$dataAttrs>
     <!-- Header -->
-    <div class="cyberimpact-header">
-        <h1>🚀 Cyberimpact Sync Pro</h1>
-        <p>Gérez vos imports de contacts avec simplicité et efficacité</p>
-    </div>
+    <div class="cyberimpact-container">
+        <div class="cyberimpact-header">
+            <h1>🚀 Cyberimpact Sync Pro</h1>
+            <p>Gérez vos imports de contacts avec simplicité et efficacité</p>
+        </div>
 
     <!-- Section 1: Token -->
     <div class="cyberimpact-section">
@@ -755,240 +783,12 @@ final class SyncModuleController
 .ms-2 { margin-left: 0.5rem; }
 .mt-3 { margin-top: 1rem; }
 </style>
+</div>
 
-<script>
-(function() {
-    const testTokenBtn = document.getElementById('test_token_btn');
-    const tokenInput = document.getElementById('cyberimpact_token');
-    const tokenLoading = document.getElementById('token_loading');
-    const tokenStatus = document.getElementById('token_status');
-    const tokenError = document.getElementById('token_error');
-    
-    const loadFieldsBtn = document.getElementById('load_fields_btn');
-    const fieldsLoading = document.getElementById('fields_loading');
-    const fieldsError = document.getElementById('fields_error');
-    const mappingForm = document.getElementById('mapping_form');
-    const mappingEmptyHint = document.getElementById('mapping_empty_hint');
-    const mappingTbody = document.getElementById('mapping_tbody');
-    const clearMappingBtn = document.getElementById('clear_mapping_btn');
-    
-    const loadGroupsBtn = document.getElementById('load_groups_btn');
-    const groupsLoading = document.getElementById('groups_loading');
-    const groupsError = document.getElementById('groups_error');
-    const groupSelect = document.getElementById('selected_group_id');
-    const groupForm = document.getElementById('group_form');
-
-    // Test Token
-    if (testTokenBtn) {
-        testTokenBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            const token = tokenInput.value.trim();
-            if (!token) {
-                alert('Veuillez entrer un token');
-                return;
-            }
-            
-            tokenLoading.classList.remove('cyberimpact-hidden');
-            tokenError.classList.add('cyberimpact-hidden');
-            tokenStatus.classList.add('cyberimpact-hidden');
-            testTokenBtn.disabled = true;
-            
-            try {
-                const response = await fetch(window.location.pathname + '?route=test-token', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: 'cyberimpact_token=' + encodeURIComponent(token),
-                });
-                
-                const data = await response.json();
-                
-                if (data.ok) {
-                    document.getElementById('account_name').textContent = data.account || 'N/A';
-                    document.getElementById('account_user').textContent = data.username || '-';
-                    document.getElementById('account_email').textContent = data.email || '-';
-                    tokenStatus.classList.remove('cyberimpact-hidden');
-                    tokenInput.type = 'password';
-                    tokenInput.value = '';
-                } else {
-                    tokenError.textContent = data.error || 'Erreur inconnue';
-                    tokenError.classList.remove('cyberimpact-hidden');
-                }
-            } catch (err) {
-                tokenError.textContent = 'Erreur réseau: ' + err.message;
-                tokenError.classList.remove('cyberimpact-hidden');
-            } finally {
-                tokenLoading.classList.add('cyberimpact-hidden');
-                testTokenBtn.disabled = false;
-            }
-        });
-    }
-
-    // Load Fields
-    if (loadFieldsBtn) {
-        loadFieldsBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            fieldsLoading.classList.remove('cyberimpact-hidden');
-            fieldsError.classList.add('cyberimpact-hidden');
-            loadFieldsBtn.disabled = true;
-            
-            try {
-                const response = await fetch(window.location.pathname + '?route=cyberimpact-fields', {
-                    headers: { 'Accept': 'application/json' },
-                });
-                const data = await response.json();
-                
-                if (data.error) {
-                    fieldsError.textContent = data.error;
-                    fieldsError.classList.remove('cyberimpact-hidden');
-                    return;
-                }
-                
-                mappingTbody.innerHTML = '';
-                
-                // Standard fields
-                for (const [key, label] of Object.entries(data.standardFields)) {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td>' + label + '</td>' +
-                        '<td><input type="text" name="standard[' + key + ']" class="cyberimpact-form-control" ' +
-                        'placeholder="Nom de la colonne Excel…"></td>';
-                    mappingTbody.appendChild(tr);
-                }
-                
-                // Custom fields
-                for (const field of data.customFields) {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td>' + field.name + '</td>' +
-                        '<td><input type="text" name="customFields[' + field.id + ']" class="cyberimpact-form-control" ' +
-                        'placeholder="Nom de la colonne Excel…"></td>';
-                    mappingTbody.appendChild(tr);
-                }
-                
-                mappingForm.classList.remove('cyberimpact-hidden');
-                mappingEmptyHint.classList.add('cyberimpact-hidden');
-            } catch (err) {
-                fieldsError.textContent = 'Erreur réseau: ' + err.message;
-                fieldsError.classList.remove('cyberimpact-hidden');
-            } finally {
-                fieldsLoading.classList.add('cyberimpact-hidden');
-                loadFieldsBtn.disabled = false;
-            }
-        });
-    }
-
-    // Clear Mapping
-    if (clearMappingBtn) {
-        clearMappingBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            mappingTbody.innerHTML = '';
-            mappingForm.classList.add('cyberimpact-hidden');
-            mappingEmptyHint.classList.remove('cyberimpact-hidden');
-        });
-    }
-
-    // Load Groups
-    if (loadGroupsBtn) {
-        loadGroupsBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            groupsLoading.classList.remove('cyberimpact-hidden');
-            groupsError.classList.add('cyberimpact-hidden');
-            loadGroupsBtn.disabled = true;
-            
-            try {
-                const response = await fetch(window.location.pathname + '?route=cyberimpact-groups', {
-                    headers: { 'Accept': 'application/json' },
-                });
-                const data = await response.json();
-                
-                if (data.error) {
-                    groupsError.textContent = data.error;
-                    groupsError.classList.remove('cyberimpact-hidden');
-                    return;
-                }
-                
-                groupSelect.innerHTML = '<option value="">-- Sélectionner un groupe --</option>';
-                for (const group of data.groups) {
-                    const option = document.createElement('option');
-                    option.value = group.id;
-                    option.textContent = group.title + ' (' + group.membersCount + ' membres)';
-                    groupSelect.appendChild(option);
-                }
-            } catch (err) {
-                groupsError.textContent = 'Erreur réseau: ' + err.message;
-                groupsError.classList.remove('cyberimpact-hidden');
-            } finally {
-                groupsLoading.classList.add('cyberimpact-hidden');
-                loadGroupsBtn.disabled = false;
-            }
-        });
-    }
-
-    // Save Mapping
-    if (mappingForm) {
-        mappingForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const formData = new FormData(mappingForm);
-            const data = Object.fromEntries(formData);
-            
-            try {
-                const response = await fetch(window.location.pathname + '?route=column-mapping', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify(data),
-                });
-                
-                const result = await response.json();
-                if (result.ok) {
-                    alert(result.message);
-                } else {
-                    alert('Erreur: ' + result.error);
-                }
-            } catch (err) {
-                alert('Erreur réseau: ' + err.message);
-            }
-        });
-    }
-
-    // Save Group
-    if (groupForm) {
-        groupForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const groupId = groupSelect.value;
-            
-            try {
-                const response = await fetch(window.location.pathname + '?route=selected-group', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: 'selected_group_id=' + encodeURIComponent(groupId || ''),
-                });
-                
-                const result = await response.json();
-                if (result.ok) {
-                    alert(result.message);
-                } else {
-                    alert('Erreur: ' + result.error);
-                }
-            } catch (err) {
-                alert('Erreur réseau: ' + err.message);
-            }
-        });
-    }
-})();
-</script>
 HTML;
     }
 
-    private function renderExactSyncSettings(): string
+    private function renderExactSyncSettings(array $apiUrls = []): string
     {
         try {
             $settings = ImportSettingsRepository::make()->findFirst();
@@ -997,14 +797,17 @@ HTML;
             $currentAction = 'unsubscribe';
         }
 
-        return <<<'HTML'
+        $currentActionAttr = htmlspecialchars($currentAction);
+        $exactSyncUrlAttr = htmlspecialchars($apiUrls['exactSyncSettings'] ?? '');
+
+        return <<<HTML
 <div class="cyberimpact-section">
     <div class="cyberimpact-card">
         <div class="cyberimpact-card-header">
             <span class="cyberimpact-step-number">⚙</span>
             <h3>Paramètres d'exactSync</h3>
         </div>
-        <div class="cyberimpact-card-body">
+        <div class="cyberimpact-card-body" data-current-action="$currentActionAttr" data-url-exact-sync-settings="$exactSyncUrlAttr">
             <p style="margin: 0 0 1.5rem; color: #6b7280; font-size: 0.95rem;">
                 Définissez l'action à appliquer aux contacts manquants lors de la synchronisation exacte.
             </p>
@@ -1027,71 +830,6 @@ HTML;
         </div>
     </div>
 </div>
-
-<script>
-(function() {
-    const currentAction = '
-HTML
-        . htmlspecialchars($currentAction)
-        . <<<'HTML'
-';
-    const form = document.getElementById('exactSyncForm');
-    const unsubscribeRadio = document.getElementById('action-unsubscribe');
-    const deleteRadio = document.getElementById('action-delete');
-    const saveBtn = document.getElementById('saveExactSyncBtn');
-    const messageDiv = document.getElementById('exactSyncMessage');
-
-    // Initialiser la sélection
-    if (currentAction === 'delete') {
-        deleteRadio.checked = true;
-    } else {
-        unsubscribeRadio.checked = true;
-    }
-
-    saveBtn.addEventListener('click', async function() {
-        const action = document.querySelector('input[name="missing_contacts_action"]:checked')?.value;
-        if (!action) {
-            showMessage('Veuillez sélectionner une action', 'danger');
-            return;
-        }
-
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Sauvegarde...';
-
-        try {
-            const response = await fetch(window.location.pathname + '?route=exact-sync-settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-                body: 'missing_contacts_action=' + encodeURIComponent(action),
-            });
-
-            const result = await response.json();
-
-            if (result.ok) {
-                showMessage('✓ ' + result.message, 'success');
-            } else {
-                showMessage('✗ ' + (result.error || 'Erreur inconnue'), 'danger');
-            }
-        } catch (error) {
-            showMessage('✗ Erreur réseau: ' + error.message, 'danger');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = 'Sauvegarder';
-        }
-    });
-
-    function showMessage(text, type) {
-        messageDiv.textContent = text;
-        messageDiv.style.display = 'block';
-        messageDiv.style.background = type === 'success' ? '#d1fae5' : '#fee2e2';
-        messageDiv.style.color = type === 'success' ? '#065f46' : '#991b1b';
-        messageDiv.style.borderLeft = '4px solid ' + (type === 'success' ? '#10b981' : '#ef4444');
-    }
-})();
-</script>
 HTML;
     }
 
