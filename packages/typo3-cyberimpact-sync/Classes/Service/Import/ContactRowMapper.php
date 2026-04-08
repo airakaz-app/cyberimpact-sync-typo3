@@ -16,8 +16,8 @@ final class ContactRowMapper
     /**
      * Mappe les lignes en contacts, avec support du mapping explicite.
      *
-     * @param array<int, array<string, string>> $rows Lignes Excel
-     * @param array{standard:array<string,int>,customFields:array<string,int>}|null $resolvedMap Mapping résolu (null = auto-detect)
+     * @param array<int, array<string, string>> $rows Lignes Excel indexées par nom de colonne
+     * @param array{standard:array<string,string>,customFields:array<string,string>}|null $resolvedMap Mapping résolu (null = auto-detect)
      * @return array{contacts: array<int, array<string, mixed>>, errors: array<int, array<string, string>>}
      */
     public function mapRows(
@@ -71,10 +71,10 @@ final class ContactRowMapper
     }
 
     /**
-     * Mode explicit mapping : extraction par index du mapping résolu.
+     * Mode explicit mapping : extraction par nom de colonne (clé string) du mapping résolu.
      *
-     * @param array<int, array<string, int|string>> $rows Lignes avec values numériques (index → value)
-     * @param array{standard:array<string,int>,customFields:array<string,int>} $resolvedMap Mapping résolu
+     * @param array<int, array<string, string>> $rows Lignes indexées par nom de colonne
+     * @param array{standard:array<string,string>,customFields:array<string,string>} $resolvedMap Mapping résolu (field → nom de colonne normalisé)
      * @return array{contacts: array<int, array<string, mixed>>, errors: array<int, array<string, string>>}
      */
     private function mapRowsWithExplicitMapping(array $rows, array $resolvedMap): array
@@ -88,8 +88,8 @@ final class ContactRowMapper
             $rowNumber = (string)$rowIndex;
 
             // Extraire l'email (obligatoire)
-            $emailIdx = $resolvedMap['standard']['email'] ?? null;
-            if ($emailIdx === null) {
+            $emailKey = $resolvedMap['standard']['email'] ?? null;
+            if ($emailKey === null) {
                 $errors[] = [
                     'row' => $rowNumber,
                     'code' => 'no_email_column',
@@ -99,7 +99,7 @@ final class ContactRowMapper
                 continue;
             }
 
-            $email = strtolower(trim((string)($row[$emailIdx] ?? '')));
+            $email = strtolower(trim((string)($row[$emailKey] ?? '')));
 
             if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
                 $errors[] = [
@@ -114,11 +114,11 @@ final class ContactRowMapper
             $contact = ['email' => $email];
 
             // Extraire les champs standards
-            foreach ($resolvedMap['standard'] as $field => $idx) {
+            foreach ($resolvedMap['standard'] as $field => $colKey) {
                 if ($field === 'email') {
                     continue;
                 }
-                $value = trim((string)($row[$idx] ?? ''));
+                $value = trim((string)($row[$colKey] ?? ''));
                 if ($value !== '') {
                     $contact[$field] = $value;
                 }
@@ -127,8 +127,8 @@ final class ContactRowMapper
             // Extraire les champs personnalisés
             if (!empty($resolvedMap['customFields'])) {
                 $customFields = [];
-                foreach ($resolvedMap['customFields'] as $fieldId => $idx) {
-                    $value = trim((string)($row[$idx] ?? ''));
+                foreach ($resolvedMap['customFields'] as $fieldId => $colKey) {
+                    $value = trim((string)($row[$colKey] ?? ''));
                     if ($value !== '') {
                         $customFields[$fieldId] = $value;
                     }

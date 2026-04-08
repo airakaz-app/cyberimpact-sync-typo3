@@ -90,9 +90,9 @@ final class ScanImportFolderCommand extends Command
         $contacts = [];
 
         foreach ($this->excelChunkReader->readChunksFromLocalFile($localFilePath, $chunkSize) as $chunk) {
-            $totalRows += count($chunk);
+            $totalRows += count($chunk['rows']);
 
-            $mapped = $this->contactRowMapper->mapRows($chunk);
+            $mapped = $this->contactRowMapper->mapRows($chunk['rows'], $chunk['resolvedMap']);
             $validRows += count($mapped['contacts']);
             $contacts = array_merge($contacts, $mapped['contacts']);
 

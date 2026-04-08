@@ -557,11 +557,8 @@ final class CyberimpactClient
     }
 
     /**
-     * @return array{settings: array<string, mixed>, baseUrl: string, timeout: float, token: string}|null
-     */
-    /**
      * Crée le contexte de requête pour les appels API.
-     * 
+     *
      * @param string|null $customToken Token personnalisé à utiliser (optionnel)
      * @return array{settings: array<string, mixed>, baseUrl: string, timeout: float, token: string}|null
      */

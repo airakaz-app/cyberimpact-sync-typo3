@@ -104,7 +104,7 @@ final class ChunkProcessor
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array<int, array<string, mixed>>
      */
     private function decodeContacts(string $payloadJson): array
     {
@@ -113,20 +113,6 @@ final class ChunkProcessor
             return [];
         }
 
-        $contacts = [];
-        foreach ($decoded as $contact) {
-            if (!is_array($contact)) {
-                continue;
-            }
-
-            $contacts[] = [
-                'email' => (string)($contact['email'] ?? ''),
-                'firstname' => (string)($contact['firstname'] ?? ''),
-                'lastname' => (string)($contact['lastname'] ?? ''),
-                'phone' => (string)($contact['phone'] ?? ''),
-            ];
-        }
-
-        return $contacts;
+        return array_values(array_filter($decoded, 'is_array'));
     }
 }

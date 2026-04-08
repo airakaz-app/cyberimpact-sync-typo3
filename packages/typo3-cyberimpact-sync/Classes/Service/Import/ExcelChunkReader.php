@@ -17,7 +17,7 @@ final class ExcelChunkReader
      * @param string $localFilePath Chemin du fichier Excel
      * @param int $chunkSize Taille des chunks
      * @param array{standard:array<string,string>,customFields:array<string,string>}|null $columnMapping Mapping configuré (null = auto-detect)
-     * @return iterable<int, array{headers: array<string,string>, rows: array<int,array<string,string>>, resolvedMap: array{standard:array<string,int>,customFields:array<string,int>>}>
+     * @return iterable<int, array{headers: array<int,string>, rows: array<int,array<string,string>>, resolvedMap: array{standard:array<string,string>,customFields:array<string,string>}|null}>
      */
     public function readChunksFromLocalFile(
         string $localFilePath,
@@ -25,24 +25,32 @@ final class ExcelChunkReader
         ?array $columnMapping = null
     ): iterable {
         $allRows = $this->readRows($localFilePath);
-        
+
         if (empty($allRows)) {
             return;
         }
 
-        // Les headers sont la première ligne, retourner les données après
-        $headers = (array)reset($allRows);
-        array_shift($allRows);  // Enlever la première ligne (headers)
-        
-        // Résoudre le mapping
-        $resolvedMap = self::resolveHeaderMap($headers, $columnMapping);
+        // Les rows sont déjà indexées par les noms de colonnes (clés string).
+        // On extrait les noms de colonnes depuis les clés du premier row.
+        $firstRow = reset($allRows);
+        $headerNames = array_values(array_filter(
+            array_keys($firstRow),
+            static fn(string $k): bool => $k !== '_rownum'
+        ));
+
+        // En mode auto-detect (columnMapping === null), on passe resolvedMap = null
+        // pour que mapRows() utilise la détection par alias (clés string).
+        // En mode explicit, on construit le resolvedMap depuis le columnMapping configuré.
+        $resolvedMap = $columnMapping !== null
+            ? self::resolveHeaderMap($headerNames, $columnMapping)
+            : null;
 
         $chunk = [];
         foreach ($allRows as $row) {
             $chunk[] = $row;
             if (count($chunk) >= $chunkSize) {
                 yield [
-                    'headers' => $headers,
+                    'headers' => $headerNames,
                     'rows' => $chunk,
                     'resolvedMap' => $resolvedMap,
                 ];
@@ -52,7 +60,7 @@ final class ExcelChunkReader
 
         if ($chunk !== []) {
             yield [
-                'headers' => $headers,
+                'headers' => $headerNames,
                 'rows' => $chunk,
                 'resolvedMap' => $resolvedMap,
             ];
@@ -113,29 +121,28 @@ final class ExcelChunkReader
 
     /**
      * Mode explicit : utilise le mapping configuré par l'admin.
+     * Retourne le nom de colonne normalisé (clé string) pour chaque champ,
+     * compatible avec les rows indexées par nom de colonne.
      *
-     * @param array<string,string> $headers Headers normalisés (lowercase)
+     * @param array<int,string> $headers Noms de colonnes du fichier Excel (liste)
      * @param array{standard:array<string,string>,customFields:array<string,string>} $columnMapping Mapping configuré
-     * @return array{standard:array<string,int>,customFields:array<string,int>}
+     * @return array{standard:array<string,string>,customFields:array<string,string>}
      */
     private static function resolveHeaderMapFromConfig(
         array $headers,
         array $columnMapping
     ): array {
-        // Index inversé : "header name" (lowercase) → index
-        $headerIndex = [];
-        foreach ($headers as $idx => $header) {
-            $headerIndex[strtolower(trim($header))] = (int)$idx;
-        }
+        // Ensemble des noms de colonnes présents dans le fichier (lowercase)
+        $headerSet = array_flip(array_map('strtolower', $headers));
 
         $standard = [];
         foreach ($columnMapping['standard'] ?? [] as $field => $colHeader) {
             if ($colHeader === null || $colHeader === '') {
                 continue;
             }
-            $idx = $headerIndex[strtolower(trim($colHeader))] ?? null;
-            if ($idx !== null) {
-                $standard[(string)$field] = $idx;
+            $normalized = strtolower(trim($colHeader));
+            if (array_key_exists($normalized, $headerSet)) {
+                $standard[(string)$field] = $normalized;
             }
         }
 
@@ -144,9 +151,9 @@ final class ExcelChunkReader
             if ($colHeader === null || $colHeader === '') {
                 continue;
             }
-            $idx = $headerIndex[strtolower(trim($colHeader))] ?? null;
-            if ($idx !== null) {
-                $customFields[(string)$fieldId] = $idx;
+            $normalized = strtolower(trim($colHeader));
+            if (array_key_exists($normalized, $headerSet)) {
+                $customFields[(string)$fieldId] = $normalized;
             }
         }
 

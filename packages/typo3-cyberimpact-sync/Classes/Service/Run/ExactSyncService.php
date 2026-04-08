@@ -142,16 +142,4 @@ final class ExactSyncService
         return 'unsubscribe';
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function getSettings(): array
-    {
-        try {
-            $settings = $this->extensionConfiguration->get('cyberimpact_sync');
-            return is_array($settings) ? $settings : [];
-        } catch (\Throwable) {
-            return [];
-        }
-    }
 }

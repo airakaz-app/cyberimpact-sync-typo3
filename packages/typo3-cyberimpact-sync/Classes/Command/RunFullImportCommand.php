@@ -278,33 +278,39 @@ final class RunFullImportCommand extends Command
     /**
      * Prepare run from file (read Excel, validate, create chunks)
      *
-     * @param int $runUid
-     * @param string $filePath
-     * @param int $chunkSize
      * @return array<string, int>
      */
     private function prepareRunFromFile(int $runUid, string $filePath, int $chunkSize): array
     {
-        $rows = $this->excelChunkReader->readAllRows($filePath);
-        $validRows = [];
+        $totalRows = 0;
+        $validRows = 0;
         $errorCount = 0;
+        $contacts = [];
 
-        foreach ($rows as $rowIndex => $row) {
-            $mapped = $this->contactRowMapper->mapRowToContact($row);
-            if ($mapped['contact'] !== null) {
-                $validRows[] = $mapped['contact'];
-            } else {
+        foreach ($this->excelChunkReader->readChunksFromLocalFile($filePath, $chunkSize) as $chunk) {
+            $totalRows += count($chunk['rows']);
+            $mapped = $this->contactRowMapper->mapRows($chunk['rows'], $chunk['resolvedMap']);
+            $validRows += count($mapped['contacts']);
+            $contacts = array_merge($contacts, $mapped['contacts']);
+
+            foreach ($mapped['errors'] as $error) {
                 $errorCount++;
-                $this->errorStorage->recordRowError($runUid, $rowIndex, $mapped['error'] ?? 'Unknown error');
+                $this->errorStorage->createRunError(
+                    $runUid,
+                    'parse',
+                    (string)($error['code'] ?? 'parse_error'),
+                    (string)($error['message'] ?? 'Erreur de parsing'),
+                    (string)($error['payload'] ?? '')
+                );
             }
         }
 
-        $this->runManager->updateRunTotalRows($runUid, count($rows));
-        $chunkCount = $this->runManager->createChunksFromContacts($runUid, $validRows, $chunkSize);
+        $this->runManager->updateRunTotalRows($runUid, $totalRows);
+        $chunkCount = $this->runManager->createChunksFromContacts($runUid, $contacts, $chunkSize);
 
         return [
-            'totalRows' => count($rows),
-            'validRows' => count($validRows),
+            'totalRows' => $totalRows,
+            'validRows' => $validRows,
             'errorCount' => $errorCount,
             'chunkCount' => $chunkCount,
         ];
