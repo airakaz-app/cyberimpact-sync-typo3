@@ -38,35 +38,46 @@ final class SyncModuleController
 
     public function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
-        $flashMessages = [];
-        if (strtoupper($request->getMethod()) === 'POST') {
-            $flashMessages[] = $this->handleUpload($request);
+        try {
+            $flashMessages = [];
+            if (strtoupper($request->getMethod()) === 'POST') {
+                $flashMessages[] = $this->handleUpload($request);
+            }
+
+            // Build API URLs using UriBuilder
+            $apiUrls = [
+                'testToken' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.test-token'),
+                'cyberimpactFields' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-fields'),
+                'cyberimpactGroups' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-groups'),
+                'columnMapping' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.column-mapping'),
+                'selectedGroup' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
+                'exactSyncSettings' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
+            ];
+
+            $queryParams = $request->getQueryParams();
+            $content = implode('', $flashMessages) . $this->renderUploadForm($apiUrls);
+            $content .= $this->renderExactSyncSettings($apiUrls);
+            $content .= $this->renderRunsList();
+
+            $runUid = (int)($queryParams['run'] ?? 0);
+            if ($runUid > 0) {
+                $content .= $this->renderRunDetail($runUid);
+            }
+
+            $jsUrl = PathUtility::getPublicResourceWebPath('EXT:cyberimpact_sync/Resources/Public/JavaScript/sync-module.js');
+            if ($jsUrl) {
+                $content .= '<script src="' . htmlspecialchars($jsUrl) . '"></script>';
+            }
+
+            return new HtmlResponse($content);
+        } catch (\Throwable $e) {
+            // Fallback if something goes wrong
+            $errorContent = '<div style="background: #fee2e2; border: 1px solid #fca5a5; padding: 1rem; margin: 1rem; border-radius: 8px;">'
+                . '<strong>Erreur lors du chargement du module:</strong><br>'
+                . htmlspecialchars($e->getMessage())
+                . '</div>';
+            return new HtmlResponse($errorContent);
         }
-
-        // Build API URLs using UriBuilder
-        $apiUrls = [
-            'testToken' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.test-token'),
-            'cyberimpactFields' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-fields'),
-            'cyberimpactGroups' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-groups'),
-            'columnMapping' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.column-mapping'),
-            'selectedGroup' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
-            'exactSyncSettings' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
-        ];
-
-        $queryParams = $request->getQueryParams();
-        $content = implode('', $flashMessages) . $this->renderUploadForm($apiUrls);
-        $content .= $this->renderExactSyncSettings($apiUrls);
-        $content .= $this->renderRunsList();
-
-        $runUid = (int)($queryParams['run'] ?? 0);
-        if ($runUid > 0) {
-            $content .= $this->renderRunDetail($runUid);
-        }
-
-        $jsUrl = PathUtility::getPublicResourceWebPath('EXT:cyberimpact_sync/Resources/Public/JavaScript/sync-module.js');
-        $content .= '<script src="' . htmlspecialchars($jsUrl) . '"></script>';
-
-        return new HtmlResponse($content);
     }
 
     /**
@@ -384,6 +395,7 @@ final class SyncModuleController
 
         $dataAttrs = '';
         if (!empty($apiUrls)) {
+            $mappingJson = json_encode($currentMapping ?? [], JSON_UNESCAPED_SLASHES | JSON_HEX_QUOT);
             $dataAttrs = ' data-url-test-token="' . htmlspecialchars($apiUrls['testToken'] ?? '') . '"'
                 . ' data-url-cyberimpact-fields="' . htmlspecialchars($apiUrls['cyberimpactFields'] ?? '') . '"'
                 . ' data-url-cyberimpact-groups="' . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
@@ -391,7 +403,7 @@ final class SyncModuleController
                 . ' data-url-selected-group="' . htmlspecialchars($apiUrls['selectedGroup'] ?? '') . '"'
                 . ' data-url-exact-sync-settings="' . htmlspecialchars($apiUrls['exactSyncSettings'] ?? '') . '"'
                 . ' data-current-token="' . htmlspecialchars($currentToken) . '"'
-                . ' data-current-mapping="' . htmlspecialchars(json_encode($currentMapping ?? [], JSON_UNESCAPED_SLASHES)) . '"'
+                . ' data-current-mapping="' . $mappingJson . '"'
                 . ' data-current-group-id="' . htmlspecialchars((string)($currentGroupId ?? '')) . '"';
         }
 
@@ -722,7 +734,6 @@ final class SyncModuleController
                         </table>
                     </div>
                     
-                    <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer mapping</button>
                     <div style="display: flex; gap: 0.75rem;">
                         <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer mapping</button>
                         <button type="button" class="cyberimpact-btn cyberimpact-btn-secondary" id="clear_mapping_btn">Effacer</button>

@@ -34,6 +34,19 @@
         groupId: mainContainer.dataset.currentGroupId || '',
     };
 
+    function tryParseJson(jsonString) {
+        try {
+            if (typeof jsonString !== 'string' || !jsonString.trim()) {
+                return {};
+            }
+            const parsed = JSON.parse(jsonString);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (e) {
+            console.warn('Failed to parse JSON from data attribute:', jsonString, e);
+            return {};
+        }
+    }
+
     // Validate URLs
     for (const [key, url] of Object.entries(apiUrls)) {
         if (!url && key !== 'exactSyncSettings') {
@@ -254,8 +267,19 @@
         mappingForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            // Build nested structure from FormData
             const formData = new FormData(mappingForm);
-            const data = Object.fromEntries(formData);
+            const data = { standard: {}, customFields: {} };
+            
+            for (const [key, value] of formData.entries()) {
+                if (key.startsWith('standard[') && key.endsWith(']')) {
+                    const fieldName = key.substring(9, key.length - 1);
+                    data.standard[fieldName] = value;
+                } else if (key.startsWith('customFields[') && key.endsWith(']')) {
+                    const fieldId = key.substring(13, key.length - 1);
+                    data.customFields[fieldId] = value;
+                }
+            }
 
             try {
                 const response = await fetch(apiUrls.columnMapping, {
@@ -376,13 +400,5 @@
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
-    }
-
-    function tryParseJson(jsonString) {
-        try {
-            return typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
-        } catch (e) {
-            return {};
-        }
     }
 })();
