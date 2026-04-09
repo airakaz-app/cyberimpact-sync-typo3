@@ -22,7 +22,7 @@ final class ImportSettingsRepository
 
     public static function make(): self
     {
-        return GeneralUtility::makeInstance(self::class);
+        return new self(GeneralUtility::makeInstance(ConnectionPool::class));
     }
 
     /**
@@ -106,8 +106,7 @@ final class ImportSettingsRepository
         $connection = $this->connectionPool->getConnectionForTable(self::TABLE);
         $connection->insert(
             self::TABLE,
-            $this->mapEntityToRow($settings),
-            ['column_mapping' => \PDO::PARAM_STR]
+            $this->mapEntityToRow($settings)
         );
 
         $uid = (int)$connection->lastInsertId();
@@ -129,8 +128,7 @@ final class ImportSettingsRepository
         $connection->update(
             self::TABLE,
             $this->mapEntityToRow($settings),
-            ['uid' => $settings->getUid()],
-            ['column_mapping' => \PDO::PARAM_STR]
+            ['uid' => $settings->getUid()]
         );
     }
 

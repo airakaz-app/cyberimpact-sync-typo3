@@ -21,6 +21,7 @@ use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
+use TYPO3\CMS\Core\Utility\PathUtility;
 
 final class SyncModuleController
 {
@@ -34,12 +35,12 @@ final class SyncModuleController
         // Build API URLs using UriBuilder
         $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
         $apiUrls = [
-            'testToken' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'test-token']),
-            'cyberimpactFields' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'cyberimpact-fields']),
-            'cyberimpactGroups' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'cyberimpact-groups']),
-            'columnMapping' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'column-mapping']),
-            'selectedGroup' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'selected-group']),
-            'exactSyncSettings' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync', ['route' => 'exact-sync-settings']),
+            'testToken' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.test-token'),
+            'cyberimpactFields' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-fields'),
+            'cyberimpactGroups' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-groups'),
+            'columnMapping' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.column-mapping'),
+            'selectedGroup' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
+            'exactSyncSettings' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
         ];
 
         $queryParams = $request->getQueryParams();
@@ -51,6 +52,9 @@ final class SyncModuleController
         if ($runUid > 0) {
             $content .= $this->renderRunDetail($runUid);
         }
+
+        $jsUrl = PathUtility::getPublicResourceWebPath('EXT:cyberimpact_sync/Resources/Public/JavaScript/sync-module.js');
+        $content .= '<script src="' . htmlspecialchars($jsUrl) . '"></script>';
 
         return new HtmlResponse($content);
     }

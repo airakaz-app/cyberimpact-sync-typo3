@@ -5,7 +5,7 @@
 
 (function() {
 
-    alert('test22555');
+
     // Get API URLs from data attributes on main container
     const mainContainer = document.getElementById('cyberimpact-module-container');
     if (!mainContainer) return;
