@@ -27,11 +27,33 @@
     // Get currentAction for exactSync
     const currentAction = exactSyncCardBody?.dataset.currentAction || 'unsubscribe';
 
+    // Get pre-loaded data from data attributes
+    const preloadedData = {
+        token: mainContainer.dataset.currentToken || '',
+        mapping: tryParseJson(mainContainer.dataset.currentMapping || '{}'),
+        groupId: mainContainer.dataset.currentGroupId || '',
+    };
+
     // Validate URLs
     for (const [key, url] of Object.entries(apiUrls)) {
         if (!url && key !== 'exactSyncSettings') {
             console.warn(`Missing API URL: ${key}`);
         }
+    }
+
+    // ==================== Initialize Pre-Loaded Data ====================
+    // Initialize token status if token exists
+    const tokenInput = document.getElementById('cyberimpact_token');
+    const tokenStatus = document.getElementById('token_status');
+    if (preloadedData.token && tokenStatus) {
+        tokenStatus.classList.remove('cyberimpact-hidden');
+        tokenInput.type = 'password';
+    }
+
+    // Initialize group selection if group exists
+    const groupSelect = document.getElementById('selected_group_id');
+    if (preloadedData.groupId && groupSelect) {
+        groupSelect.value = preloadedData.groupId;
     }
 
     // ==================== Test Token ====================
@@ -97,55 +119,67 @@
     const mappingTbody = document.getElementById('mapping_tbody');
     const clearMappingBtn = document.getElementById('clear_mapping_btn');
 
+    async function loadFieldsData() {
+        fieldsLoading.classList.remove('cyberimpact-hidden');
+        fieldsError.classList.add('cyberimpact-hidden');
+        loadFieldsBtn.disabled = true;
+
+        try {
+            const response = await fetch(apiUrls.cyberimpactFields, {
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                fieldsError.textContent = data.error;
+                fieldsError.classList.remove('cyberimpact-hidden');
+                return;
+            }
+
+            mappingTbody.innerHTML = '';
+
+            // Standard fields
+            for (const [key, label] of Object.entries(data.standardFields)) {
+                const tr = document.createElement('tr');
+                const existingValue = preloadedData.mapping?.standard?.[key] || '';
+                tr.innerHTML = '<td>' + escapeHtml(label) + '</td>' +
+                    '<td><input type="text" name="standard[' + escapeHtml(key) + ']" class="cyberimpact-form-control" ' +
+                    'placeholder="Nom de la colonne Excel…" value="' + escapeHtml(existingValue) + '"></td>';
+                mappingTbody.appendChild(tr);
+            }
+
+            // Custom fields
+            for (const field of data.customFields) {
+                const tr = document.createElement('tr');
+                const existingValue = preloadedData.mapping?.customFields?.[field.id] || '';
+                tr.innerHTML = '<td>' + escapeHtml(field.name) + '</td>' +
+                    '<td><input type="text" name="customFields[' + escapeHtml(field.id.toString()) + ']" class="cyberimpact-form-control" ' +
+                    'placeholder="Nom de la colonne Excel…" value="' + escapeHtml(existingValue) + '"></td>';
+                mappingTbody.appendChild(tr);
+            }
+
+            mappingForm.classList.remove('cyberimpact-hidden');
+            mappingEmptyHint.classList.add('cyberimpact-hidden');
+        } catch (err) {
+            fieldsError.textContent = 'Erreur réseau: ' + err.message;
+            fieldsError.classList.remove('cyberimpact-hidden');
+        } finally {
+            fieldsLoading.classList.add('cyberimpact-hidden');
+            loadFieldsBtn.disabled = false;
+        }
+    }
+
     if (loadFieldsBtn) {
         loadFieldsBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            fieldsLoading.classList.remove('cyberimpact-hidden');
-            fieldsError.classList.add('cyberimpact-hidden');
-            loadFieldsBtn.disabled = true;
-
-            try {
-                const response = await fetch(apiUrls.cyberimpactFields, {
-                    headers: { 'Accept': 'application/json' },
-                });
-                const data = await response.json();
-
-                if (data.error) {
-                    fieldsError.textContent = data.error;
-                    fieldsError.classList.remove('cyberimpact-hidden');
-                    return;
-                }
-
-                mappingTbody.innerHTML = '';
-
-                // Standard fields
-                for (const [key, label] of Object.entries(data.standardFields)) {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td>' + escapeHtml(label) + '</td>' +
-                        '<td><input type="text" name="standard[' + escapeHtml(key) + ']" class="cyberimpact-form-control" ' +
-                        'placeholder="Nom de la colonne Excel…"></td>';
-                    mappingTbody.appendChild(tr);
-                }
-
-                // Custom fields
-                for (const field of data.customFields) {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td>' + escapeHtml(field.name) + '</td>' +
-                        '<td><input type="text" name="customFields[' + escapeHtml(field.id.toString()) + ']" class="cyberimpact-form-control" ' +
-                        'placeholder="Nom de la colonne Excel…"></td>';
-                    mappingTbody.appendChild(tr);
-                }
-
-                mappingForm.classList.remove('cyberimpact-hidden');
-                mappingEmptyHint.classList.add('cyberimpact-hidden');
-            } catch (err) {
-                fieldsError.textContent = 'Erreur réseau: ' + err.message;
-                fieldsError.classList.remove('cyberimpact-hidden');
-            } finally {
-                fieldsLoading.classList.add('cyberimpact-hidden');
-                loadFieldsBtn.disabled = false;
-            }
+            await loadFieldsData();
         });
+    }
+
+    // Auto-load fields if mapping exists
+    if ((preloadedData.mapping?.standard && Object.keys(preloadedData.mapping.standard).length > 0) ||
+        (preloadedData.mapping?.customFields && Object.keys(preloadedData.mapping.customFields).length > 0)) {
+        loadFieldsData();
     }
 
     // ==================== Clear Mapping ====================
@@ -165,40 +199,54 @@
     const groupSelect = document.getElementById('selected_group_id');
     const groupForm = document.getElementById('group_form');
 
+    async function loadGroupsData() {
+        groupsLoading.classList.remove('cyberimpact-hidden');
+        groupsError.classList.add('cyberimpact-hidden');
+        loadGroupsBtn.disabled = true;
+
+        try {
+            const response = await fetch(apiUrls.cyberimpactGroups, {
+                headers: { 'Accept': 'application/json' },
+            });
+            const data = await response.json();
+
+            if (data.error) {
+                groupsError.textContent = data.error;
+                groupsError.classList.remove('cyberimpact-hidden');
+                return;
+            }
+
+            groupSelect.innerHTML = '<option value="">-- Sélectionner un groupe --</option>';
+            for (const group of data.groups) {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = group.title + ' (' + group.membersCount + ' membres)';
+                groupSelect.appendChild(option);
+            }
+
+            // Restore pre-selected group if it exists
+            if (preloadedData.groupId) {
+                groupSelect.value = preloadedData.groupId;
+            }
+        } catch (err) {
+            groupsError.textContent = 'Erreur réseau: ' + err.message;
+            groupsError.classList.remove('cyberimpact-hidden');
+        } finally {
+            groupsLoading.classList.add('cyberimpact-hidden');
+            loadGroupsBtn.disabled = false;
+        }
+    }
+
     if (loadGroupsBtn) {
         loadGroupsBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            groupsLoading.classList.remove('cyberimpact-hidden');
-            groupsError.classList.add('cyberimpact-hidden');
-            loadGroupsBtn.disabled = true;
-
-            try {
-                const response = await fetch(apiUrls.cyberimpactGroups, {
-                    headers: { 'Accept': 'application/json' },
-                });
-                const data = await response.json();
-
-                if (data.error) {
-                    groupsError.textContent = data.error;
-                    groupsError.classList.remove('cyberimpact-hidden');
-                    return;
-                }
-
-                groupSelect.innerHTML = '<option value="">-- Sélectionner un groupe --</option>';
-                for (const group of data.groups) {
-                    const option = document.createElement('option');
-                    option.value = group.id;
-                    option.textContent = group.title + ' (' + group.membersCount + ' membres)';
-                    groupSelect.appendChild(option);
-                }
-            } catch (err) {
-                groupsError.textContent = 'Erreur réseau: ' + err.message;
-                groupsError.classList.remove('cyberimpact-hidden');
-            } finally {
-                groupsLoading.classList.add('cyberimpact-hidden');
-                loadGroupsBtn.disabled = false;
-            }
+            await loadGroupsData();
         });
+    }
+
+    // Auto-load groups if a group was pre-selected
+    if (preloadedData.groupId && groupSelect && groupSelect.options.length <= 1) {
+        loadGroupsData();
     }
 
     // ==================== Save Mapping ====================
@@ -328,5 +376,13 @@
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
+    }
+
+    function tryParseJson(jsonString) {
+        try {
+            return typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+        } catch (e) {
+            return {};
+        }
     }
 })();

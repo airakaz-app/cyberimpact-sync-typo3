@@ -370,6 +370,18 @@ final class SyncModuleController
 
     private function renderUploadForm(array $apiUrls = []): string
     {
+        // Charger les données actuelles depuis la BD
+        try {
+            $settings = ImportSettingsRepository::make()->findFirst();
+            $currentToken = $settings->getCyberimpactToken();
+            $currentMapping = $settings->getColumnMapping();
+            $currentGroupId = $settings->getSelectedGroupId();
+        } catch (\Throwable) {
+            $currentToken = '';
+            $currentMapping = null;
+            $currentGroupId = null;
+        }
+
         $dataAttrs = '';
         if (!empty($apiUrls)) {
             $dataAttrs = ' data-url-test-token="' . htmlspecialchars($apiUrls['testToken'] ?? '') . '"'
@@ -377,7 +389,10 @@ final class SyncModuleController
                 . ' data-url-cyberimpact-groups="' . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
                 . ' data-url-column-mapping="' . htmlspecialchars($apiUrls['columnMapping'] ?? '') . '"'
                 . ' data-url-selected-group="' . htmlspecialchars($apiUrls['selectedGroup'] ?? '') . '"'
-                . ' data-url-exact-sync-settings="' . htmlspecialchars($apiUrls['exactSyncSettings'] ?? '') . '"';
+                . ' data-url-exact-sync-settings="' . htmlspecialchars($apiUrls['exactSyncSettings'] ?? '') . '"'
+                . ' data-current-token="' . htmlspecialchars($currentToken) . '"'
+                . ' data-current-mapping="' . htmlspecialchars(json_encode($currentMapping ?? [], JSON_UNESCAPED_SLASHES)) . '"'
+                . ' data-current-group-id="' . htmlspecialchars((string)($currentGroupId ?? '')) . '"';
         }
 
         return <<<HTML
@@ -800,6 +815,10 @@ HTML;
 
         $currentActionAttr = htmlspecialchars($currentAction);
         $exactSyncUrlAttr = htmlspecialchars($apiUrls['exactSyncSettings'] ?? '');
+        
+        // Generate checked attributes based on currentAction
+        $unsubscribeChecked = $currentAction === 'unsubscribe' ? 'checked' : '';
+        $deleteChecked = $currentAction === 'delete' ? 'checked' : '';
 
         return <<<HTML
 <div class="cyberimpact-section">
@@ -816,11 +835,11 @@ HTML;
                 <div style="display: flex; gap: 1rem; flex: 1; min-width: 300px;">
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
                         <input type="radio" name="missing_contacts_action" value="unsubscribe" style="cursor: pointer;" 
-                               id="action-unsubscribe" /> Désabonner
+                               id="action-unsubscribe" $unsubscribeChecked /> Désabonner
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-weight: 500;">
                         <input type="radio" name="missing_contacts_action" value="delete" style="cursor: pointer;" 
-                               id="action-delete" /> Supprimer
+                               id="action-delete" $deleteChecked /> Supprimer
                     </label>
                 </div>
                 <button type="button" class="cyberimpact-btn cyberimpact-btn-primary" id="saveExactSyncBtn">

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Cyberimpact\CyberimpactSync\Service\Cyberimpact;
 
+use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Http\RequestFactory;
 
@@ -601,11 +602,24 @@ final class CyberimpactClient
      */
     private function resolveToken(array $settings): string
     {
+        // Lire d'abord de la BD (ImportSettingsRepository)
+        try {
+            $importSettings = ImportSettingsRepository::make()->findFirst();
+            $dbToken = $importSettings->getCyberimpactToken();
+            if (!empty(trim($dbToken))) {
+                return trim($dbToken);
+            }
+        } catch (\Throwable) {
+            // Si la BD n'est pas accessible, continuer
+        }
+
+        // Fallback: env var
         $envToken = getenv('CYBERIMPACT_TOKEN');
         if (is_string($envToken) && trim($envToken) !== '') {
             return trim($envToken);
         }
 
+        // Fallback: ExtensionConfiguration
         $configToken = (string)($settings['apiToken'] ?? '');
         return trim($configToken);
     }
