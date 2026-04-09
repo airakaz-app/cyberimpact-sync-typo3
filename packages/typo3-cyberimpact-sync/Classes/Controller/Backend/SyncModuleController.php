@@ -16,15 +16,26 @@ use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Routing\UriBuilder;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
-use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Http\HtmlResponse;
 use TYPO3\CMS\Core\Http\JsonResponse;
 use TYPO3\CMS\Core\Resource\StorageRepository;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\PathUtility;
 
 final class SyncModuleController
 {
+    public function __construct(
+        private readonly UriBuilder $uriBuilder,
+        private readonly CyberimpactClient $cyberimpactClient,
+        private readonly ExtensionConfiguration $extensionConfiguration,
+        private readonly StorageRepository $storageRepository,
+        private readonly RunManager $runManager,
+        private readonly RunStorage $runStorage,
+        private readonly ChunkStorage $chunkStorage,
+        private readonly ErrorStorage $errorStorage,
+        private readonly ExcelChunkReader $excelChunkReader,
+        private readonly ContactRowMapper $contactRowMapper,
+    ) {}
+
     public function handleRequest(ServerRequestInterface $request): ResponseInterface
     {
         $flashMessages = [];
@@ -33,14 +44,13 @@ final class SyncModuleController
         }
 
         // Build API URLs using UriBuilder
-        $uriBuilder = GeneralUtility::makeInstance(UriBuilder::class);
         $apiUrls = [
-            'testToken' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.test-token'),
-            'cyberimpactFields' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-fields'),
-            'cyberimpactGroups' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-groups'),
-            'columnMapping' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.column-mapping'),
-            'selectedGroup' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
-            'exactSyncSettings' => (string)$uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
+            'testToken' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.test-token'),
+            'cyberimpactFields' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-fields'),
+            'cyberimpactGroups' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-groups'),
+            'columnMapping' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.column-mapping'),
+            'selectedGroup' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
+            'exactSyncSettings' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
         ];
 
         $queryParams = $request->getQueryParams();
@@ -76,8 +86,7 @@ final class SyncModuleController
         }
 
         try {
-            $client = GeneralUtility::makeInstance(CyberimpactClient::class);
-            $result = $client->checkConnection($token);
+            $result = $this->cyberimpactClient->checkConnection($token);
 
             if (!$result['ok']) {
                 return new JsonResponse([
@@ -117,8 +126,7 @@ final class SyncModuleController
     public function fetchCyberimpactFields(): ResponseInterface
     {
         try {
-            $client = GeneralUtility::makeInstance(CyberimpactClient::class);
-            $customFields = $client->fetchCustomFields();
+            $customFields = $this->cyberimpactClient->fetchCustomFields();
 
             // Champs standards disponibles
             $standardFields = [
@@ -153,8 +161,7 @@ final class SyncModuleController
     public function fetchCyberimpactGroups(): ResponseInterface
     {
         try {
-            $client = GeneralUtility::makeInstance(CyberimpactClient::class);
-            $groups = $client->fetchGroups();
+            $groups = $this->cyberimpactClient->fetchGroups();
 
             return new JsonResponse([
                 'groups' => array_values(array_map(static fn(array $group): array => [
@@ -965,46 +972,41 @@ HTML;
 
     private function extensionConfiguration(): ExtensionConfiguration
     {
-        return GeneralUtility::makeInstance(ExtensionConfiguration::class);
+        return $this->extensionConfiguration;
     }
 
     private function storageRepository(): StorageRepository
     {
-        return GeneralUtility::makeInstance(StorageRepository::class);
+        return $this->storageRepository;
     }
 
     private function runManager(): RunManager
     {
-        return GeneralUtility::makeInstance(RunManager::class);
+        return $this->runManager;
     }
 
     private function runStorage(): RunStorage
     {
-        return GeneralUtility::makeInstance(RunStorage::class, $this->connectionPool());
+        return $this->runStorage;
     }
 
     private function chunkStorage(): ChunkStorage
     {
-        return GeneralUtility::makeInstance(ChunkStorage::class, $this->connectionPool());
+        return $this->chunkStorage;
     }
 
     private function errorStorage(): ErrorStorage
     {
-        return GeneralUtility::makeInstance(ErrorStorage::class, $this->connectionPool());
-    }
-
-    private function connectionPool(): ConnectionPool
-    {
-        return GeneralUtility::makeInstance(ConnectionPool::class);
+        return $this->errorStorage;
     }
 
     private function excelChunkReader(): ExcelChunkReader
     {
-        return GeneralUtility::makeInstance(ExcelChunkReader::class);
+        return $this->excelChunkReader;
     }
 
     private function contactRowMapper(): ContactRowMapper
     {
-        return GeneralUtility::makeInstance(ContactRowMapper::class);
+        return $this->contactRowMapper;
     }
 }

@@ -7,6 +7,9 @@ services:
   Cyberimpact\CyberimpactSync\:
     resource: '../Classes/*'
 
+  Cyberimpact\CyberimpactSync\Controller\Backend\SyncModuleController:
+    public: true
+
   Cyberimpact\CyberimpactSync\Command\CheckConnectionCommand:
     tags:
       - name: 'console.command'
