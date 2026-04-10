@@ -383,29 +383,34 @@ final class SyncModuleController
     {
         // Charger les données actuelles depuis la BD
         try {
-            $settings = ImportSettingsRepository::make()->findFirst();
-            $currentToken = $settings->getCyberimpactToken();
-            $currentMapping = $settings->getColumnMapping();
-            $currentGroupId = $settings->getSelectedGroupId();
+            $dbSettings = ImportSettingsRepository::make()->findFirst();
+            $tokenValidatedFlag = !empty($dbSettings->getCyberimpactToken()) ? '1' : '0';
+            $accountName = htmlspecialchars((string)($dbSettings->getCyberimpactAccount() ?? ''));
+            $accountUser = htmlspecialchars((string)($dbSettings->getCyberimpactUsername() ?? ''));
+            $accountEmail = htmlspecialchars((string)($dbSettings->getCyberimpactEmail() ?? ''));
+            $tokenStatusHidden = $tokenValidatedFlag === '1' ? '' : ' cyberimpact-hidden';
+            $mappingJson = htmlspecialchars(
+                json_encode($dbSettings->getColumnMapping() ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}'
+            );
+            $currentGroupId = htmlspecialchars((string)($dbSettings->getSelectedGroupId() ?? ''));
         } catch (\Throwable) {
-            $currentToken = '';
-            $currentMapping = null;
-            $currentGroupId = null;
+            $tokenValidatedFlag = '0';
+            $accountName = '';
+            $accountUser = '';
+            $accountEmail = '';
+            $tokenStatusHidden = ' cyberimpact-hidden';
+            $mappingJson = '{}';
+            $currentGroupId = '';
         }
 
-        $dataAttrs = '';
-        if (!empty($apiUrls)) {
-            $mappingJson = json_encode($currentMapping ?? [], JSON_UNESCAPED_SLASHES | JSON_HEX_QUOT);
-            $dataAttrs = ' data-url-test-token="' . htmlspecialchars($apiUrls['testToken'] ?? '') . '"'
-                . ' data-url-cyberimpact-fields="' . htmlspecialchars($apiUrls['cyberimpactFields'] ?? '') . '"'
-                . ' data-url-cyberimpact-groups="' . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
-                . ' data-url-column-mapping="' . htmlspecialchars($apiUrls['columnMapping'] ?? '') . '"'
-                . ' data-url-selected-group="' . htmlspecialchars($apiUrls['selectedGroup'] ?? '') . '"'
-                . ' data-url-exact-sync-settings="' . htmlspecialchars($apiUrls['exactSyncSettings'] ?? '') . '"'
-                . ' data-current-token="' . htmlspecialchars($currentToken) . '"'
-                . ' data-current-mapping="' . $mappingJson . '"'
-                . ' data-current-group-id="' . htmlspecialchars((string)($currentGroupId ?? '')) . '"';
-        }
+        $dataAttrs = ' data-url-test-token="' . htmlspecialchars($apiUrls['testToken'] ?? '') . '"'
+            . ' data-url-cyberimpact-fields="' . htmlspecialchars($apiUrls['cyberimpactFields'] ?? '') . '"'
+            . ' data-url-cyberimpact-groups="' . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
+            . ' data-url-column-mapping="' . htmlspecialchars($apiUrls['columnMapping'] ?? '') . '"'
+            . ' data-url-selected-group="' . htmlspecialchars($apiUrls['selectedGroup'] ?? '') . '"'
+            . ' data-token-validated="' . $tokenValidatedFlag . '"'
+            . ' data-current-mapping="' . $mappingJson . '"'
+            . ' data-current-group-id="' . $currentGroupId . '"';
 
         return <<<HTML
 <style>
@@ -687,11 +692,11 @@ final class SyncModuleController
                     </div>
                 </form>
                 
-                <div id="token_status" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
+                <div id="token_status" class="$tokenStatusHidden" style="margin-top: 1.5rem;">
                     <div class="cyberimpact-alert cyberimpact-alert-success">
                         <strong>✓ Connexion validée</strong><br>
-                        Compte: <strong id="account_name"></strong><br>
-                        Utilisateur: <em id="account_user"></em> (<em id="account_email"></em>)
+                        Compte: <strong id="account_name">$accountName</strong><br>
+                        Utilisateur: <em id="account_user">$accountUser</em> (<em id="account_email">$accountEmail</em>)
                     </div>
                 </div>
                 
