@@ -320,7 +320,7 @@ final class SyncModuleController
         $storageUid = (int)($settings['falStorageUid'] ?? 1);
         $incomingFolder = (string)($settings['incomingFolder'] ?? 'incoming/');
 
-        $storage = $this->storageRepository()->getStorageByUid($storageUid);
+        $storage = $this->storageRepository->getStorageByUid($storageUid);
         if (!$storage) {
             return '<div class="alert alert-danger">FAL storage not found: ' . htmlspecialchars((string)$storageUid) . '</div>';
         }
@@ -339,17 +339,17 @@ final class SyncModuleController
         $safeFileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName) ?: ('import_' . time() . '.xlsx');
         $falFile = $storage->addFile($temporaryPath, $folder, $safeFileName, 'changeName');
 
-        $runUid = $this->runManager()->queueFromFalFile($falFile->getUid(), true, false);
+        $runUid = $this->runManager->queueFromFalFile($falFile->getUid(), true, false);
         if ($runUid === null) {
             return '<div class="alert alert-warning">Un run est déjà en cours pour ce fichier.</div>';
         }
 
         // Analyser les lignes Excel (avec mapping configuré)
         $stats = $this->analyzeRows($falFile->getForLocalProcessing(), $runUid);
-        $this->runManager()->updateRunTotalRows($runUid, $stats['totalRows']);
+        $this->runManager->updateRunTotalRows($runUid, $stats['totalRows']);
         
         // Créer les chunks avec le groupe cible (si configuré)
-        $chunkCount = $this->runManager()->createChunksFromContacts($runUid, $stats['contacts'], 500);
+        $chunkCount = $this->runManager->createChunksFromContacts($runUid, $stats['contacts'], 500);
 
         $groupInfo = '';
         if ($selectedGroupId !== null && $selectedGroupId > 0) {
@@ -372,7 +372,7 @@ final class SyncModuleController
     private function getSettings(): array
     {
         try {
-            $settings = $this->extensionConfiguration()->get('cyberimpact_sync');
+            $settings = $this->extensionConfiguration->get('cyberimpact_sync');
             return is_array($settings) ? $settings : [];
         } catch (\Throwable) {
             return [];
@@ -743,6 +743,7 @@ final class SyncModuleController
                         <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer mapping</button>
                         <button type="button" class="cyberimpact-btn cyberimpact-btn-secondary" id="clear_mapping_btn">Effacer</button>
                     </div>
+                    <div id="mappingMessage" style="margin-top: 1rem; display: none; padding: 1rem; border-radius: 8px;"></div>
                 </form>
                 
                 <div id="mapping_empty_hint" class="cyberimpact-alert cyberimpact-alert-info">
@@ -781,6 +782,7 @@ final class SyncModuleController
                         </select>
                     </div>
                     <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer groupe</button>
+                    <div id="groupMessage" style="margin-top: 1rem; display: none; padding: 1rem; border-radius: 8px;"></div>
                 </form>
             </div>
         </div>
@@ -871,7 +873,7 @@ HTML;
 
     private function renderRunsList(): string
     {
-        $rows = $this->runStorage()->findRecentRuns(30);
+        $rows = $this->runStorage->findRecentRuns(30);
         if ($rows === []) {
             return '<hr><h3>Runs récents</h3><p>Aucun run.</p>';
         }
@@ -903,13 +905,13 @@ HTML;
 
     private function renderRunDetail(int $runUid): string
     {
-        $run = $this->runStorage()->findRunByUid($runUid);
+        $run = $this->runStorage->findRunByUid($runUid);
         if ($run === null) {
             return '<div class="alert alert-warning" style="margin-top: 1rem;">Run introuvable.</div>';
         }
 
-        $chunks = $this->chunkStorage()->findChunksByRunUid($runUid);
-        $errors = $this->errorStorage()->findErrorsByRunUid($runUid, 200);
+        $chunks = $this->chunkStorage->findChunksByRunUid($runUid);
+        $errors = $this->errorStorage->findErrorsByRunUid($runUid, 200);
 
         $html = '<hr><h3>Détail run #' . $runUid . '</h3>';
         $html .= '<p><strong>Statut:</strong> <code>' . htmlspecialchars((string)($run['status'] ?? '')) . '</code> '
@@ -971,11 +973,11 @@ HTML;
         $columnMapping = $settings->getColumnMapping();
 
         // Lire les chunks avec le mapping (null = auto-detect)
-        foreach ($this->excelChunkReader()->readChunksFromLocalFile($localFilePath, 500, $columnMapping) as $chunk) {
+        foreach ($this->excelChunkReader->readChunksFromLocalFile($localFilePath, 500, $columnMapping) as $chunk) {
             $totalRows += count($chunk['rows'] ?? []);
 
             // Passer le resolvedMap au mapper
-            $mapped = $this->contactRowMapper()->mapRows(
+            $mapped = $this->contactRowMapper->mapRows(
                 $chunk['rows'] ?? [],
                 $chunk['resolvedMap'] ?? null
             );
@@ -985,7 +987,7 @@ HTML;
 
             foreach ($mapped['errors'] as $error) {
                 $errorCount++;
-                $this->errorStorage()->createRunError(
+                $this->errorStorage->createRunError(
                     $runUid,
                     'parse',
                     (string)($error['code'] ?? 'parse_error'),
@@ -1003,45 +1005,4 @@ HTML;
         ];
     }
 
-
-
-    private function extensionConfiguration(): ExtensionConfiguration
-    {
-        return $this->extensionConfiguration;
-    }
-
-    private function storageRepository(): StorageRepository
-    {
-        return $this->storageRepository;
-    }
-
-    private function runManager(): RunManager
-    {
-        return $this->runManager;
-    }
-
-    private function runStorage(): RunStorage
-    {
-        return $this->runStorage;
-    }
-
-    private function chunkStorage(): ChunkStorage
-    {
-        return $this->chunkStorage;
-    }
-
-    private function errorStorage(): ErrorStorage
-    {
-        return $this->errorStorage;
-    }
-
-    private function excelChunkReader(): ExcelChunkReader
-    {
-        return $this->excelChunkReader;
-    }
-
-    private function contactRowMapper(): ContactRowMapper
-    {
-        return $this->contactRowMapper;
-    }
 }

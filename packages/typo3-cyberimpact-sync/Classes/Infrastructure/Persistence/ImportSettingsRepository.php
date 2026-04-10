@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cyberimpact\CyberimpactSync\Infrastructure\Persistence;
 
 use Cyberimpact\CyberimpactSync\Domain\Model\ImportSettings;
+use Doctrine\DBAL\ParameterType;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -59,7 +60,7 @@ final class ImportSettingsRepository
         $result = $queryBuilder
             ->select('*')
             ->from(self::TABLE)
-            ->where('uid = ' . $queryBuilder->createNamedParameter($uid))
+            ->where($queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, ParameterType::INTEGER)))
             ->executeQuery()
             ->fetchAssociative();
 
@@ -75,7 +76,7 @@ final class ImportSettingsRepository
         $results = $queryBuilder
             ->select('*')
             ->from(self::TABLE)
-            ->where('pid = ' . $queryBuilder->createNamedParameter($pid))
+            ->where($queryBuilder->expr()->eq('pid', $queryBuilder->createNamedParameter($pid, ParameterType::INTEGER)))
             ->executeQuery()
             ->fetchAllAssociative();
 

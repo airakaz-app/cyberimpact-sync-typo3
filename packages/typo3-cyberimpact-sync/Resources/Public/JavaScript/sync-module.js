@@ -243,6 +243,7 @@
     }
 
     // ==================== Save Mapping ====================
+    const mappingMessage = document.getElementById('mappingMessage');
     if (mappingForm) {
         mappingForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -257,17 +258,18 @@
                 });
                 const result = await response.json();
                 if (result.ok) {
-                    alert(result.message);
+                    showMessage(mappingMessage, '✓ ' + result.message, 'success');
                 } else {
-                    alert('Erreur: ' + result.error);
+                    showMessage(mappingMessage, '✗ ' + (result.error || 'Erreur inconnue'), 'danger');
                 }
             } catch (err) {
-                alert('Erreur réseau: ' + err.message);
+                showMessage(mappingMessage, '✗ Erreur réseau: ' + err.message, 'danger');
             }
         });
     }
 
     // ==================== Save Group ====================
+    const groupMessage = document.getElementById('groupMessage');
     if (groupForm) {
         groupForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -282,12 +284,12 @@
                 });
                 const result = await response.json();
                 if (result.ok) {
-                    alert(result.message);
+                    showMessage(groupMessage, '✓ ' + result.message, 'success');
                 } else {
-                    alert('Erreur: ' + result.error);
+                    showMessage(groupMessage, '✗ ' + (result.error || 'Erreur inconnue'), 'danger');
                 }
             } catch (err) {
-                alert('Erreur réseau: ' + err.message);
+                showMessage(groupMessage, '✗ Erreur réseau: ' + err.message, 'danger');
             }
         });
     }
@@ -314,12 +316,12 @@
                 });
                 const result = await response.json();
                 if (result.ok) {
-                    showMessage('✓ ' + result.message, 'success');
+                    showMessage(messageDiv, '✓ ' + result.message, 'success');
                 } else {
-                    showMessage('✗ ' + (result.error || 'Erreur inconnue'), 'danger');
+                    showMessage(messageDiv, '✗ ' + (result.error || 'Erreur inconnue'), 'danger');
                 }
             } catch (err) {
-                showMessage('✗ Erreur réseau: ' + err.message, 'danger');
+                showMessage(messageDiv, '✗ Erreur réseau: ' + err.message, 'danger');
             } finally {
                 exactSyncBtn.disabled = false;
                 exactSyncBtn.textContent = originalText;
@@ -328,13 +330,13 @@
     }
 
     // ==================== Helpers ====================
-    function showMessage(text, type) {
-        if (!messageDiv) return;
-        messageDiv.textContent = text;
-        messageDiv.style.display = 'block';
-        messageDiv.style.background = type === 'success' ? '#d1fae5' : '#fee2e2';
-        messageDiv.style.color     = type === 'success' ? '#065f46' : '#991b1b';
-        messageDiv.style.borderLeft = '4px solid ' + (type === 'success' ? '#10b981' : '#ef4444');
+    function showMessage(el, text, type) {
+        if (!el) return;
+        el.textContent = text;
+        el.style.display = 'block';
+        el.style.background   = type === 'success' ? '#d1fae5' : '#fee2e2';
+        el.style.color        = type === 'success' ? '#065f46' : '#991b1b';
+        el.style.borderLeft   = '4px solid ' + (type === 'success' ? '#10b981' : '#ef4444');
     }
 
     function escapeHtml(str) {

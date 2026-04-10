@@ -126,7 +126,7 @@ final class CyberimpactClient
         $ok = $statusCode >= 200 && $statusCode < 300;
 
         if ($ok) {
-            $batchId = $this->extractBatchId($response);
+            $batchId = $this->extractBatchId((string)$response->getBody());
             if ($batchId > 0) {
                 $polled = $this->pollBatchResult($batchId, $request);
                 return [
@@ -391,7 +391,7 @@ final class CyberimpactClient
         $ok = $status >= 200 && $status < 300;
 
         if ($ok) {
-            $batchId = $this->extractBatchId($response);
+            $batchId = $this->extractBatchId((string)$response->getBody());
             if ($batchId > 0) {
                 $polled = $this->pollBatchResult($batchId, $request);
                 return [
@@ -465,7 +465,7 @@ final class CyberimpactClient
                 $isRetryableStatus = $status === 429 || $status >= 500;
 
                 if ($isRetryableStatus && $attempt < $maxAttempts) {
-                    $delayMs = $initialDelayMs * (2 ** ($attempt - 1));
+                    $delayMs = min($initialDelayMs * (2 ** ($attempt - 1)), 30000);
                     if ($delayMs > 0) {
                         usleep($delayMs * 1000);
                     }
@@ -491,9 +491,9 @@ final class CyberimpactClient
     }
 
 
-    private function extractBatchId(\Psr\Http\Message\ResponseInterface $response): int
+    private function extractBatchId(string $body): int
     {
-        $payload = json_decode((string)$response->getBody(), true);
+        $payload = json_decode($body, true);
         if (!is_array($payload)) {
             return 0;
         }

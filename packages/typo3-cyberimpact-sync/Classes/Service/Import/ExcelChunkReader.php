@@ -94,25 +94,24 @@ final class ExcelChunkReader
      */
     private static function resolveHeaderMapAuto(array $headers): array
     {
-        $aliases = [
-            'email'      => ['email', 'e-mail', 'courriel'],
-            'firstname'  => ['firstname', 'first_name', 'prenom', 'prénom'],
-            'lastname'   => ['lastname', 'last_name', 'nom', 'nom complet'],
-            'company'    => ['company', 'entreprise', 'compagnie'],
-            'language'   => ['language', 'langue'],
-            'postalCode' => ['postalcode', 'postal_code', 'code postal', 'codepostal'],
-            'country'    => ['country', 'pays'],
-            'note'       => ['note', 'notes'],
-            'phone'      => ['phone', 'telephone', 'téléphone', 'mobile'],
+        // Flat lookup: alias → field name — O(1) per header instead of O(fields)
+        $aliasLookup = [
+            'email' => 'email', 'e-mail' => 'email', 'courriel' => 'email',
+            'firstname' => 'firstname', 'first_name' => 'firstname', 'prenom' => 'firstname', 'prénom' => 'firstname',
+            'lastname' => 'lastname', 'last_name' => 'lastname', 'nom' => 'lastname', 'nom complet' => 'lastname',
+            'company' => 'company', 'entreprise' => 'company', 'compagnie' => 'company',
+            'language' => 'language', 'langue' => 'language',
+            'postalcode' => 'postalCode', 'postal_code' => 'postalCode', 'code postal' => 'postalCode', 'codepostal' => 'postalCode',
+            'country' => 'country', 'pays' => 'country',
+            'note' => 'note', 'notes' => 'note',
+            'phone' => 'phone', 'telephone' => 'phone', 'téléphone' => 'phone', 'mobile' => 'phone',
         ];
 
         $standard = [];
         foreach ($headers as $index => $header) {
             $normalized = strtolower(trim($header));
-            foreach ($aliases as $field => $options) {
-                if (in_array($normalized, $options, true)) {
-                    $standard[$field] = (int)$index;
-                }
+            if (isset($aliasLookup[$normalized])) {
+                $standard[$aliasLookup[$normalized]] = (int)$index;
             }
         }
 
@@ -179,7 +178,10 @@ final class ExcelChunkReader
         }
 
         $sharedStrings = $this->parseSharedStrings($sharedStringsXml);
+
+        libxml_use_internal_errors(true);
         $sheet = simplexml_load_string($sheetXml);
+        libxml_clear_errors();
         if ($sheet === false) {
             return [];
         }
@@ -252,7 +254,9 @@ final class ExcelChunkReader
             return [];
         }
 
+        libxml_use_internal_errors(true);
         $sharedStrings = simplexml_load_string($xml);
+        libxml_clear_errors();
         if ($sharedStrings === false) {
             return [];
         }
