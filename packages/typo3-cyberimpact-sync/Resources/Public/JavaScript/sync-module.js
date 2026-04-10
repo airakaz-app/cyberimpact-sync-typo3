@@ -81,6 +81,11 @@
     }
 
     // ==================== Test Token ====================
+    const tokenForm = document.getElementById('token_form');
+    if (tokenForm) {
+        tokenForm.addEventListener('submit', (e) => e.preventDefault());
+    }
+
     if (testTokenBtn) {
         testTokenBtn.addEventListener('click', async (e) => {
             e.preventDefault();

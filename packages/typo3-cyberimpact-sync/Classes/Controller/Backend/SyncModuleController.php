@@ -673,7 +673,7 @@ final class SyncModuleController
                 <h3>Établir la connexion</h3>
             </div>
             <div class="cyberimpact-card-body">
-                <form id="token_form" onsubmit="return false;">
+                <form id="token_form">
                     <div class="cyberimpact-form-group" style="max-width: 450px;">
                         <label for="cyberimpact_token">Token API Cyberimpact</label>
                         <input type="password" class="cyberimpact-form-control" id="cyberimpact_token" 
@@ -726,7 +726,7 @@ final class SyncModuleController
                 </span>
                 <div id="fields_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
                 
-                <form id="mapping_form" onsubmit="return false;" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
+                <form id="mapping_form" class="cyberimpact-hidden" style="margin-top: 1.5rem;">
                     <div class="table-responsive" style="margin-bottom: 1.5rem;">
                         <table class="cyberimpact-table">
                             <thead>
@@ -773,7 +773,7 @@ final class SyncModuleController
                 </span>
                 <div id="groups_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
                 
-                <form id="group_form" onsubmit="return false;" style="margin-top: 1rem;">
+                <form id="group_form" style="margin-top: 1rem;">
                     <div class="cyberimpact-form-group" style="max-width: 450px;">
                         <label for="selected_group_id">Groupe cible</label>
                         <select id="selected_group_id" name="selected_group_id" class="cyberimpact-form-control">
