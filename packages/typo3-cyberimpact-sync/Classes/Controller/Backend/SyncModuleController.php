@@ -11,6 +11,7 @@ use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Service\Cyberimpact\CyberimpactClient;
 use Cyberimpact\CyberimpactSync\Service\Import\ContactRowMapper;
 use Cyberimpact\CyberimpactSync\Service\Import\ExcelChunkReader;
+use Cyberimpact\CyberimpactSync\Service\Run\ChunkProcessor;
 use Cyberimpact\CyberimpactSync\Service\Run\RunManager;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -34,6 +35,7 @@ final class SyncModuleController
         private readonly ErrorStorage $errorStorage,
         private readonly ExcelChunkReader $excelChunkReader,
         private readonly ContactRowMapper $contactRowMapper,
+        private readonly ChunkProcessor $chunkProcessor,
     ) {}
 
     public function handleRequest(ServerRequestInterface $request): ResponseInterface
@@ -52,6 +54,7 @@ final class SyncModuleController
                 'columnMapping' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.column-mapping'),
                 'selectedGroup' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
                 'exactSyncSettings' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
+                'triggerRun' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.trigger-run'),
             ];
 
             $queryParams = $request->getQueryParams();
@@ -298,6 +301,51 @@ final class SyncModuleController
         }
     }
 
+    /**
+     * Lance manuellement un run queued
+     */
+    public function triggerRun(ServerRequestInterface $request): ResponseInterface
+    {
+        if (strtoupper($request->getMethod()) !== 'POST') {
+            return new JsonResponse(['error' => 'Method not allowed'], 405);
+        }
+
+        try {
+            // Pour les requêtes JSON, décoder le corps manuellement
+            $parsedBody = json_decode($request->getBody()->getContents(), true);
+            $runUid = (int)($parsedBody['run_uid'] ?? 0);
+
+            if ($runUid <= 0) {
+                return new JsonResponse(['error' => 'Run UID invalide'], 400);
+            }
+
+            $run = $this->runStorage->findRunByUid($runUid);
+            if ($run === null) {
+                return new JsonResponse(['error' => 'Run introuvable'], 404);
+            }
+
+            if ($run['status'] !== 'queued') {
+                return new JsonResponse([
+                    'error' => 'Ce run n\'est pas en attente (statut actuel: ' . $run['status'] . ')',
+                ], 400);
+            }
+
+            // Lancer le traitement du run
+            $this->chunkProcessor->processRunChunks($runUid);
+
+            return new JsonResponse([
+                'ok' => true,
+                'message' => 'Run #' . $runUid . ' en cours de traitement',
+                'status' => 'processing',
+            ]);
+        } catch (\Throwable $e) {
+            return new JsonResponse([
+                'ok' => false,
+                'error' => 'Erreur lors du lancement du run: ' . $e->getMessage(),
+            ], 502);
+        }
+    }
+
     private function handleUpload(ServerRequestInterface $request): string
     {
         $uploadedFiles = $request->getUploadedFiles();
@@ -320,7 +368,7 @@ final class SyncModuleController
         $storageUid = (int)($settings['falStorageUid'] ?? 1);
         $incomingFolder = (string)($settings['incomingFolder'] ?? 'incoming/');
 
-        $storage = $this->storageRepository->getStorageByUid($storageUid);
+        $storage = $this->storageRepository->findByUid($storageUid);
         if (!$storage) {
             return '<div class="alert alert-danger">FAL storage not found: ' . htmlspecialchars((string)$storageUid) . '</div>';
         }
@@ -329,15 +377,9 @@ final class SyncModuleController
         }
 
         $folder = $storage->getFolder($incomingFolder);
-        $temporaryPath = tempnam(sys_get_temp_dir(), 'cyberimpact_');
-        if ($temporaryPath === false) {
-            return '<div class="alert alert-danger">Impossible de créer un fichier temporaire.</div>';
-        }
-
-        $uploadedFile->moveTo($temporaryPath);
 
         $safeFileName = preg_replace('/[^a-zA-Z0-9._-]/', '_', $originalName) ?: ('import_' . time() . '.xlsx');
-        $falFile = $storage->addFile($temporaryPath, $folder, $safeFileName, 'changeName');
+        $falFile = $storage->addUploadedFile($uploadedFile, $folder, $safeFileName, \TYPO3\CMS\Core\Resource\Enum\DuplicationBehavior::RENAME);
 
         $runUid = $this->runManager->queueFromFalFile($falFile->getUid(), true, false);
         if ($runUid === null) {
@@ -408,6 +450,7 @@ final class SyncModuleController
             . ' data-url-cyberimpact-groups="' . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
             . ' data-url-column-mapping="' . htmlspecialchars($apiUrls['columnMapping'] ?? '') . '"'
             . ' data-url-selected-group="' . htmlspecialchars($apiUrls['selectedGroup'] ?? '') . '"'
+            . ' data-url-trigger-run="' . htmlspecialchars($apiUrls['triggerRun'] ?? '') . '"'
             . ' data-token-validated="' . $tokenValidatedFlag . '"'
             . ' data-current-mapping="' . $mappingJson . '"'
             . ' data-current-group-id="' . $currentGroupId . '"';
@@ -881,20 +924,27 @@ HTML;
         $html = '<hr><h3>Runs récents</h3>';
         $html .= '<table class="table table-striped" style="margin-top: 0.75rem;">';
         $html .= '<thead><tr>'
-            . '<th>#</th><th>Statut</th><th>Dry-run</th><th>Exact-sync</th><th>Rows</th><th>Upsert</th><th>Report UID</th><th>Détail</th>'
+            . '<th>#</th><th>Statut</th><th>Dry-run</th><th>Exact-sync</th><th>Rows</th><th>Upsert</th><th>Report UID</th><th>Actions</th>'
             . '</tr></thead><tbody>';
 
         foreach ($rows as $run) {
             $runUid = (int)($run['uid'] ?? 0);
+            $status = (string)($run['status'] ?? '');
+            $triggerBtn = '';
+            
+            if ($status === 'queued') {
+                $triggerBtn = ' <button class="btn btn-sm btn-warning trigger-run-btn" data-run-uid="' . $runUid . '" style="margin-left: 0.5rem;">▶ Lancer</button>';
+            }
+            
             $html .= '<tr>';
             $html .= '<td>' . $runUid . '</td>';
-            $html .= '<td><code>' . htmlspecialchars((string)($run['status'] ?? '')) . '</code></td>';
+            $html .= '<td><code>' . htmlspecialchars($status) . '</code></td>';
             $html .= '<td>' . (((int)($run['dry_run'] ?? 0)) === 1 ? 'oui' : 'non') . '</td>';
             $html .= '<td>' . (((int)($run['exact_sync'] ?? 0)) === 1 ? 'oui' : 'non') . '</td>';
             $html .= '<td>' . (int)($run['processed_rows'] ?? 0) . ' / ' . (int)($run['total_rows'] ?? 0) . '</td>';
             $html .= '<td>' . (int)($run['upsert_ok'] ?? 0) . ' ok / ' . (int)($run['upsert_failed'] ?? 0) . ' failed</td>';
             $html .= '<td>' . (int)($run['report_file_uid'] ?? 0) . '</td>';
-            $html .= '<td><a class="btn btn-default" href="?id=0&run=' . $runUid . '">Voir</a></td>';
+            $html .= '<td><a class="btn btn-default btn-sm" href="?id=0&run=' . $runUid . '">Voir</a>' . $triggerBtn . '</td>';
             $html .= '</tr>';
         }
 

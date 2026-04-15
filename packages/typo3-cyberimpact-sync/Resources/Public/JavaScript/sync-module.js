@@ -15,6 +15,7 @@
         cyberimpactGroups: mainContainer.dataset.urlCyberimpactGroups,
         columnMapping:    mainContainer.dataset.urlColumnMapping,
         selectedGroup:    mainContainer.dataset.urlSelectedGroup,
+        triggerRun:       mainContainer.dataset.urlTriggerRun,
     };
 
     const exactSyncCardBody = document.querySelector('[data-url-exact-sync-settings]');
@@ -328,6 +329,42 @@
             }
         });
     }
+
+    // ==================== Trigger Run ====================
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('trigger-run-btn')) {
+            const runUid = e.target.dataset.runUid;
+            const btn = e.target;
+            const originalText = btn.textContent;
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Traitement...';
+            
+            fetch(apiUrls.triggerRun || '', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': document.querySelector('input[name="_token"]')?.value || ''
+                },
+                body: JSON.stringify({ run_uid: runUid })
+            }).then(response => response.json())
+            .then(data => {
+                if (data.ok) {
+                    alert('✓ Run #' + runUid + ' lancé avec succès !');
+                    window.location.reload();
+                } else {
+                    alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            }).catch(err => {
+                console.error('Erreur:', err);
+                alert('❌ Erreur de connexion');
+                btn.disabled = false;
+                btn.textContent = originalText;
+            });
+        }
+    });
 
     // ==================== Helpers ====================
     function showMessage(el, text, type) {

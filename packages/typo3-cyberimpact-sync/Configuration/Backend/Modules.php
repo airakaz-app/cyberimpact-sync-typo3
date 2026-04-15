@@ -34,6 +34,9 @@ return [
             'exact-sync-settings' => [
                 'target' => SyncModuleController::class . '::saveExactSyncSettings',
             ],
+            'trigger-run' => [
+                'target' => SyncModuleController::class . '::triggerRun',
+            ],
         ],
     ],
 ];
