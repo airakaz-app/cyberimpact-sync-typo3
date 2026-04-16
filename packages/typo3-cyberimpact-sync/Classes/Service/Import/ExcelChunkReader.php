@@ -197,6 +197,7 @@ final class ExcelChunkReader
 
         foreach ($xmlRows as $rowIndex => $xmlRow) {
             $values = [];
+            $xmlRow->registerXPathNamespace('main', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
             $cells = $xmlRow->xpath('main:c');
             if (!is_array($cells)) {
                 continue;
@@ -269,6 +270,7 @@ final class ExcelChunkReader
 
         $values = [];
         foreach ($items as $item) {
+            $item->registerXPathNamespace('main', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
             $texts = $item->xpath('.//main:t');
             if (!is_array($texts)) {
                 $values[] = '';

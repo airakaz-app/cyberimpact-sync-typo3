@@ -22,15 +22,6 @@
         <target>Chemin du dossier dans le stockage FAL où les fichiers Excel à importer seront déposés. Exemple: incoming/ ou imports/</target>
       </trans-unit>
 
-      <trans-unit id="ext_conf_template.dryRunDefault.label">
-        <source>Dry-run by default for auto-queued runs</source>
-        <target>Mode test par défaut</target>
-      </trans-unit>
-      <trans-unit id="ext_conf_template.dryRunDefault.description">
-        <source>If enabled, automatically created runs execute in test mode (dry-run) without modifying data in Cyberimpact. Enable this parameter for testing before production.</source>
-        <target>Si activé, les runs créés automatiquement s'exécutent en mode test (dry-run) sans modifier les données dans Cyberimpact. Activez ce paramètre pour tester avant production.</target>
-      </trans-unit>
-
       <trans-unit id="ext_conf_template.reportsFolder.label">
         <source>Reports folder in FAL storage</source>
         <target>Dossier des rapports</target>

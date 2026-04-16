@@ -6,6 +6,7 @@ namespace Cyberimpact\CyberimpactSync\Command;
 
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ErrorStorage;
+use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
 use Cyberimpact\CyberimpactSync\Service\Import\ContactRowMapper;
 use Cyberimpact\CyberimpactSync\Service\Import\ExcelChunkReader;
 use Cyberimpact\CyberimpactSync\Service\Run\ChunkProcessor;
@@ -21,13 +22,14 @@ use TYPO3\CMS\Core\Resource\StorageRepository;
 
 #[AsCommand(
     name: 'cyberimpact:import-complet',
-    description: 'Exécuter le workflow complet d\'import : scanner → traiter les chunks → finaliser les runs'
+    description: 'Workflow complet : scanner le dossier entrant → traiter les chunks → finaliser les runs.'
 )]
 final class RunFullImportCommand extends Command
 {
     public function __construct(
         private readonly StorageRepository $storageRepository,
         private readonly ExtensionConfiguration $extensionConfiguration,
+        private readonly ImportSettingsRepository $importSettingsRepository,
         private readonly RunManager $runManager,
         private readonly ExcelChunkReader $excelChunkReader,
         private readonly ContactRowMapper $contactRowMapper,
@@ -41,100 +43,88 @@ final class RunFullImportCommand extends Command
 
     protected function configure(): void
     {
-        $this->addOption(
-            'max-processing-seconds',
-            null,
-            InputOption::VALUE_OPTIONAL,
-            'Temps max (secondes) à consacrer au traitement des chunks (défaut : 3600 = 1 heure)',
-            3600
-        );
-        $this->addOption(
-            'skip-scan',
-            null,
-            InputOption::VALUE_NONE,
-            'Ignorer la phase de scan, traiter uniquement les chunks existants'
-        );
-        $this->addOption(
-            'skip-finalize',
-            null,
-            InputOption::VALUE_NONE,
-            'Ignorer la phase de finalisation, scanner et traiter seulement'
-        );
+        $this
+            ->addOption(
+                'max-processing-seconds',
+                null,
+                InputOption::VALUE_OPTIONAL,
+                'Temps max (secondes) alloué au traitement des chunks.',
+                3600
+            )
+            ->addOption(
+                'skip-scan',
+                null,
+                InputOption::VALUE_NONE,
+                'Ignorer la phase de scan et traiter uniquement les chunks existants.'
+            )
+            ->addOption(
+                'skip-finalize',
+                null,
+                InputOption::VALUE_NONE,
+                'Ignorer la phase de finalisation.'
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $startTime = time();
-        $maxProcessingSeconds = (int)$input->getOption('max-processing-seconds');
-        $skipScan = $input->getOption('skip-scan');
-        $skipFinalize = $input->getOption('skip-finalize');
+        $startTime         = time();
+        $maxSeconds        = (int)$input->getOption('max-processing-seconds');
+        $skipScan          = (bool)$input->getOption('skip-scan');
+        $skipFinalize      = (bool)$input->getOption('skip-finalize');
 
-        $output->writeln('<comment>🚀 Démarrage du workflow d\'import complet...</comment>');
-        $output->writeln('');
+        $output->writeln('<comment>Démarrage du workflow d\'import…</comment>');
 
-        // Phase 1: SCAN FOLDER
+        // Phase 1 : Scan
         if (!$skipScan) {
-            $output->writeln('<info>📂 PHASE 1 : Scan du dossier incoming...</info>');
-            $scanResult = $this->scanImportFolder($output);
-            if ($scanResult === Command::FAILURE) {
+            $output->writeln('<info>Phase 1 — Scan du dossier entrant</info>');
+            if ($this->scanFolder($output) === Command::FAILURE) {
                 return Command::FAILURE;
             }
-            $output->writeln('');
         }
 
-        // Phase 2: PROCESS CHUNKS
-        $output->writeln('<info>⚡ PHASE 2 : Traitement des chunks...</info>');
-        $processResult = $this->processAllPendingChunks($output, $maxProcessingSeconds, $startTime);
-        $output->writeln('');
+        // Phase 2 : Traitement des chunks
+        $output->writeln('<info>Phase 2 — Traitement des chunks</info>');
+        $this->processChunks($output, $maxSeconds, $startTime);
 
-        // Phase 3: FINALIZE RUNS
+        // Phase 3 : Finalisation
         if (!$skipFinalize) {
-            $output->writeln('<info>✅ PHASE 3 : Finalisation des runs complétés...</info>');
-            $this->finalizeCompletedRuns($output);
-            $output->writeln('');
+            $output->writeln('<info>Phase 3 — Finalisation des runs</info>');
+            $this->finalizeRuns($output);
         }
 
-        $elapsedTime = time() - $startTime;
         $output->writeln(sprintf(
-            '<comment>✨ Workflow d\'import complété en %d secondes</comment>',
-            $elapsedTime
+            '<comment>Workflow terminé en %d secondes.</comment>',
+            time() - $startTime
         ));
 
         return Command::SUCCESS;
     }
 
-    /**
-     * Phase 1: Scan folder and queue files
-     */
-    private function scanImportFolder(OutputInterface $output): int
+    // =========================================================================
+    // Phases du workflow
+    // =========================================================================
+
+    private function scanFolder(OutputInterface $output): int
     {
-        $settings = $this->getSettings();
-        $storageUid = (int)($settings['falStorageUid'] ?? 1);
+        $settings       = $this->getExtSettings();
+        $storageUid     = (int)($settings['falStorageUid']  ?? 1);
         $incomingFolder = (string)($settings['incomingFolder'] ?? 'incoming/');
-        $dryRunDefault = (bool)($settings['dryRunDefault'] ?? true);
-        $chunkSize = max(1, (int)($settings['chunkSize'] ?? 500));
+        $chunkSize      = max(1, (int)($settings['chunkSize'] ?? 500));
+        $columnMapping  = $this->importSettingsRepository->findFirst()->getColumnMapping();
 
         $storage = $this->storageRepository->findByUid($storageUid);
         if (!$storage) {
-            $output->writeln(sprintf(
-                '<error>❌ Stockage FAL non trouvé : %d</error>',
-                $storageUid
-            ));
+            $output->writeln(sprintf('<error>Stockage FAL introuvable : %d</error>', $storageUid));
             return Command::FAILURE;
         }
 
         if (!$storage->hasFolder($incomingFolder)) {
-            $output->writeln(sprintf(
-                '<warning>⚠️  Dossier FAL non trouvé : %s (stockage %d)</warning>',
-                $incomingFolder,
-                $storageUid
-            ));
+            $output->writeln(sprintf('<warning>Dossier FAL introuvable : %s (stockage %d)</warning>', $incomingFolder, $storageUid));
             return Command::FAILURE;
         }
 
-        $folder = $storage->getFolder($incomingFolder);
-        $files = $storage->getFilesInFolder($folder);
-
+        $folder      = $storage->getFolder($incomingFolder);
+        $files       = $storage->getFilesInFolder($folder);
         $queuedCount = 0;
         $skippedCount = 0;
 
@@ -143,37 +133,28 @@ final class RunFullImportCommand extends Command
                 continue;
             }
 
-            $runUid = $this->runManager->queueFromFalFile(
-                $file->getUid(),
-                $dryRunDefault,
-                false
-            );
-
+            $runUid = $this->runManager->queueFromFalFile($file->getUid());
             if ($runUid === null) {
                 $skippedCount++;
                 continue;
             }
 
             $queuedCount++;
-            $prepared = $this->prepareRunFromFile(
-                $runUid,
-                $file->getForLocalProcessing(),
-                $chunkSize
-            );
+            $stats = $this->prepareRun($runUid, $file->getForLocalProcessing(), $chunkSize, $columnMapping);
 
             $output->writeln(sprintf(
                 '  ✓ Run #%d : %s (%d lignes, %d valides, %d erreurs, %d chunks)',
                 $runUid,
                 $file->getName(),
-                $prepared['totalRows'],
-                $prepared['validRows'],
-                $prepared['errorCount'],
-                $prepared['chunkCount']
+                $stats['totalRows'],
+                $stats['validRows'],
+                $stats['errorCount'],
+                $stats['chunkCount']
             ));
         }
 
         $output->writeln(sprintf(
-            '<comment>Scan terminé : %d nouveaux runs créés, %d ignorés</comment>',
+            '  Scan terminé : %d run(s) créé(s), %d ignoré(s).',
             $queuedCount,
             $skippedCount
         ));
@@ -181,124 +162,83 @@ final class RunFullImportCommand extends Command
         return Command::SUCCESS;
     }
 
-    /**
-     * Phase 2: Process all pending chunks until timeout or completion
-     */
-    private function processAllPendingChunks(
-        OutputInterface $output,
-        int $maxSeconds,
-        int $startTime
-    ): int {
-        $settings = $this->getSettings();
+    private function processChunks(OutputInterface $output, int $maxSeconds, int $startTime): void
+    {
+        $settings          = $this->getExtSettings();
         $staleAfterSeconds = max(60, (int)($settings['staleChunkTimeoutSeconds'] ?? 900));
-
-        $processedCount = 0;
-        $errorCount = 0;
+        $processedCount    = 0;
+        $errorCount        = 0;
 
         while (true) {
-            // Check timeout
-            $elapsedTime = time() - $startTime;
-            if ($elapsedTime >= $maxSeconds) {
-                $output->writeln(sprintf(
-                    '<warning>⏱️  Délai d\'attente dépassé (%d secondes)</warning>',
-                    $maxSeconds
-                ));
+            if ((time() - $startTime) >= $maxSeconds) {
+                $output->writeln(sprintf('  Délai maximum de %d secondes atteint.', $maxSeconds));
                 break;
             }
 
-            // Requeue stale chunks
             $requeued = $this->chunkStorage->requeueStaleProcessingChunks($staleAfterSeconds);
             if ($requeued > 0) {
-                $output->writeln(sprintf(
-                    '  ⚠️  %d chunks périmés remis en attente',
-                    $requeued
-                ));
+                $output->writeln(sprintf('  %d chunk(s) périmé(s) remis en attente.', $requeued));
             }
 
-            // Process next chunk
             try {
-                $processed = $this->chunkProcessor->processNextPendingChunk();
-                if ($processed === false) {
-                    // No more pending chunks
-                    break;
+                if (!$this->chunkProcessor->processNextPendingChunk()) {
+                    break; // Plus aucun chunk en attente
                 }
-
                 $processedCount++;
-                $output->writeln(sprintf(
-                    '  ✓ Chunk traité (#%d)',
-                    $processedCount
-                ));
             } catch (\Throwable $e) {
                 $errorCount++;
-                $output->writeln(sprintf(
-                    '  ❌ Erreur lors du traitement du chunk : %s',
-                    $e->getMessage()
-                ));
+                $output->writeln(sprintf('  Erreur chunk : %s', $e->getMessage()));
             }
         }
 
-        $output->writeln(sprintf(
-            '<comment>Traitement terminé : %d chunks traités, %d erreurs</comment>',
-            $processedCount,
-            $errorCount
-        ));
-
-        return Command::SUCCESS;
+        $output->writeln(sprintf('  %d chunk(s) traité(s), %d erreur(s).', $processedCount, $errorCount));
     }
 
-    /**
-     * Phase 3: Finalize all completed runs
-     */
-    private function finalizeCompletedRuns(OutputInterface $output): void
+    private function finalizeRuns(OutputInterface $output): void
     {
         $finalizedCount = 0;
 
         while (true) {
             $result = $this->runFinalizer->finalizeNextRun();
 
-            if ($result['status'] === 'none' || $result['status'] === 'deferred' || $result['status'] === 'blocked') {
+            if (in_array($result['status'], ['none', 'deferred', 'blocked'], true)) {
                 break;
             }
 
             if ($result['status'] === 'finalized') {
                 $finalizedCount++;
-                $output->writeln(sprintf(
-                    '  ✓ Run finalisé : %s',
-                    $result['message']
-                ));
+                $output->writeln('  ✓ ' . $result['message']);
             }
         }
 
-        $output->writeln(sprintf(
-            '<comment>Finalisation terminée : %d runs finalisés</comment>',
-            $finalizedCount
-        ));
+        $output->writeln(sprintf('  %d run(s) finalisé(s).', $finalizedCount));
     }
 
-    /**
-     * Prepare run from file (read Excel, validate, create chunks)
-     *
-     * @return array<string, int>
-     */
-    private function prepareRunFromFile(int $runUid, string $filePath, int $chunkSize): array
-    {
-        $totalRows = 0;
-        $validRows = 0;
-        $errorCount = 0;
-        $contacts = [];
+    // =========================================================================
+    // Helper : préparation d'un run depuis un fichier Excel
+    // =========================================================================
 
-        foreach ($this->excelChunkReader->readChunksFromLocalFile($filePath, $chunkSize) as $chunk) {
-            $totalRows += count($chunk['rows']);
-            $mapped = $this->contactRowMapper->mapRows($chunk['rows'], $chunk['resolvedMap']);
-            $validRows += count($mapped['contacts']);
-            $contacts = array_merge($contacts, $mapped['contacts']);
+    /**
+     * @param array{standard:array<string,string>,customFields:array<string,string>}|null $columnMapping
+     * @return array{totalRows: int, validRows: int, errorCount: int, chunkCount: int}
+     */
+    private function prepareRun(int $runUid, string $filePath, int $chunkSize, ?array $columnMapping): array
+    {
+        $totalRows  = 0;
+        $errorCount = 0;
+        $contacts   = [];
+
+        foreach ($this->excelChunkReader->readChunksFromLocalFile($filePath, $chunkSize, $columnMapping) as $chunk) {
+            $totalRows += count($chunk['rows'] ?? []);
+            $mapped     = $this->contactRowMapper->mapRows($chunk['rows'] ?? [], $chunk['resolvedMap'] ?? null);
+            $contacts   = array_merge($contacts, $mapped['contacts']);
 
             foreach ($mapped['errors'] as $error) {
                 $errorCount++;
                 $this->errorStorage->createRunError(
                     $runUid,
                     'parse',
-                    (string)($error['code'] ?? 'parse_error'),
+                    (string)($error['code']    ?? 'parse_error'),
                     (string)($error['message'] ?? 'Erreur de parsing'),
                     (string)($error['payload'] ?? '')
                 );
@@ -309,17 +249,15 @@ final class RunFullImportCommand extends Command
         $chunkCount = $this->runManager->createChunksFromContacts($runUid, $contacts, $chunkSize);
 
         return [
-            'totalRows' => $totalRows,
-            'validRows' => $validRows,
+            'totalRows'  => $totalRows,
+            'validRows'  => count($contacts),
             'errorCount' => $errorCount,
             'chunkCount' => $chunkCount,
         ];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function getSettings(): array
+    /** @return array<string, mixed> */
+    private function getExtSettings(): array
     {
         try {
             $settings = $this->extensionConfiguration->get('cyberimpact_sync');

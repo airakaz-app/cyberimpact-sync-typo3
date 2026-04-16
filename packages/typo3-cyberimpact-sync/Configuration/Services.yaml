@@ -7,30 +7,30 @@ services:
   Cyberimpact\CyberimpactSync\:
     resource: '../Classes/*'
 
+  # Le contrôleur backend doit être public pour être résolu par le routeur TYPO3
   Cyberimpact\CyberimpactSync\Controller\Backend\SyncModuleController:
+    public: true
+
+  # Le repository est utilisé en tant que dépendance injectée dans plusieurs services
+  Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository:
     public: true
 
   Cyberimpact\CyberimpactSync\Command\CheckConnectionCommand:
     tags:
-      - name: 'console.command'
-        command: 'cyberimpact:verifier-connexion'
+      - { name: 'console.command', command: 'cyberimpact:verifier-connexion' }
 
   Cyberimpact\CyberimpactSync\Command\ScanImportFolderCommand:
     tags:
-      - name: 'console.command'
-        command: 'cyberimpact:scanner-dossier'
+      - { name: 'console.command', command: 'cyberimpact:scanner-dossier' }
 
   Cyberimpact\CyberimpactSync\Command\ProcessNextRunCommand:
     tags:
-      - name: 'console.command'
-        command: 'cyberimpact:traiter-chunk'
+      - { name: 'console.command', command: 'cyberimpact:traiter-chunk' }
 
   Cyberimpact\CyberimpactSync\Command\FinalizeRunCommand:
     tags:
-      - name: 'console.command'
-        command: 'cyberimpact:finaliser-run'
+      - { name: 'console.command', command: 'cyberimpact:finaliser-run' }
 
   Cyberimpact\CyberimpactSync\Command\RunFullImportCommand:
     tags:
-      - name: 'console.command'
-        command: 'cyberimpact:import-complet'
+      - { name: 'console.command', command: 'cyberimpact:import-complet' }

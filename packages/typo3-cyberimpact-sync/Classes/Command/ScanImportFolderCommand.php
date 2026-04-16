@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Cyberimpact\CyberimpactSync\Command;
 
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ErrorStorage;
+use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
 use Cyberimpact\CyberimpactSync\Service\Import\ContactRowMapper;
 use Cyberimpact\CyberimpactSync\Service\Import\ExcelChunkReader;
 use Cyberimpact\CyberimpactSync\Service\Run\RunManager;
@@ -15,12 +16,16 @@ use Symfony\Component\Console\Output\OutputInterface;
 use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 
-#[AsCommand(name: 'cyberimpact:scanner-dossier', description: 'Scanner le dossier FAL, créer des runs et préparer les chunks.')]
+#[AsCommand(
+    name: 'cyberimpact:scanner-dossier',
+    description: 'Scanner le dossier FAL entrant, créer et préparer les runs pour les nouveaux fichiers .xlsx.'
+)]
 final class ScanImportFolderCommand extends Command
 {
     public function __construct(
         private readonly StorageRepository $storageRepository,
         private readonly ExtensionConfiguration $extensionConfiguration,
+        private readonly ImportSettingsRepository $importSettingsRepository,
         private readonly RunManager $runManager,
         private readonly ExcelChunkReader $excelChunkReader,
         private readonly ContactRowMapper $contactRowMapper,
@@ -31,77 +36,80 @@ final class ScanImportFolderCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $settings = $this->getSettings();
-        $storageUid = (int)($settings['falStorageUid'] ?? 1);
+        $settings       = $this->getExtSettings();
+        $storageUid     = (int)($settings['falStorageUid']  ?? 1);
         $incomingFolder = (string)($settings['incomingFolder'] ?? 'incoming/');
-        $dryRunDefault = (bool)($settings['dryRunDefault'] ?? true);
-        $chunkSize = max(1, (int)($settings['chunkSize'] ?? 500));
+        $chunkSize      = max(1, (int)($settings['chunkSize'] ?? 500));
+        $columnMapping  = $this->importSettingsRepository->findFirst()->getColumnMapping();
 
         $storage = $this->storageRepository->findByUid($storageUid);
         if (!$storage) {
-            $output->writeln(sprintf('<error>Stockage FAL non trouvé : %d</error>', $storageUid));
+            $output->writeln(sprintf('<error>Stockage FAL introuvable : %d</error>', $storageUid));
             return Command::FAILURE;
         }
+
         if (!$storage->hasFolder($incomingFolder)) {
-            $output->writeln(sprintf('<error>Dossier FAL non trouvé : %s (stockage %d)</error>', $incomingFolder, $storageUid));
+            $output->writeln(sprintf('<error>Dossier FAL introuvable : %s (stockage %d)</error>', $incomingFolder, $storageUid));
             return Command::FAILURE;
         }
 
-        $folder = $storage->getFolder($incomingFolder);
-        $files = $storage->getFilesInFolder($folder);
-
+        $folder      = $storage->getFolder($incomingFolder);
+        $files       = $storage->getFilesInFolder($folder);
         $queuedCount = 0;
+
         foreach ($files as $file) {
             if (strtolower($file->getExtension()) !== 'xlsx') {
                 continue;
             }
 
-            $runUid = $this->runManager->queueFromFalFile($file->getUid(), $dryRunDefault, false);
+            $runUid = $this->runManager->queueFromFalFile($file->getUid());
             if ($runUid === null) {
+                $output->writeln(sprintf('  — %s : run déjà existant, ignoré.', $file->getName()));
                 continue;
             }
 
             $queuedCount++;
-            $prepared = $this->prepareRunFromFile($runUid, $file->getForLocalProcessing(), $chunkSize);
+            $stats = $this->prepareRun($runUid, $file->getForLocalProcessing(), $chunkSize, $columnMapping);
+
             $output->writeln(sprintf(
-                '<info>Run #%d créé+préparé pour %s (%d lignes, %d valides, %d erreurs, %d chunks)</info>',
+                '  ✓ Run #%d créé pour %s (%d lignes, %d valides, %d erreurs, %d chunks)',
                 $runUid,
                 $file->getName(),
-                $prepared['totalRows'],
-                $prepared['validRows'],
-                $prepared['errorCount'],
-                $prepared['chunkCount']
+                $stats['totalRows'],
+                $stats['validRows'],
+                $stats['errorCount'],
+                $stats['chunkCount']
             ));
         }
 
-        $output->writeln(sprintf('<comment>Scan complété. Nouveaux runs créés : %d</comment>', $queuedCount));
+        $output->writeln(sprintf('<comment>Scan terminé — %d nouveau(x) run(s) créé(s).</comment>', $queuedCount));
 
         return Command::SUCCESS;
     }
 
     /**
+     * Lit le fichier Excel, extrait les contacts et crée les chunks en base.
+     *
+     * @param array{standard:array<string,string>,customFields:array<string,string>}|null $columnMapping
      * @return array{totalRows: int, validRows: int, errorCount: int, chunkCount: int}
      */
-    private function prepareRunFromFile(int $runUid, string $localFilePath, int $chunkSize): array
+    private function prepareRun(int $runUid, string $localFilePath, int $chunkSize, ?array $columnMapping): array
     {
-        $totalRows = 0;
-        $validRows = 0;
-        $errorCount = 0;
-        $contacts = [];
+        $totalRows   = 0;
+        $errorCount  = 0;
+        $contacts    = [];
 
-        foreach ($this->excelChunkReader->readChunksFromLocalFile($localFilePath, $chunkSize) as $chunk) {
-            $totalRows += count($chunk['rows']);
-
-            $mapped = $this->contactRowMapper->mapRows($chunk['rows'], $chunk['resolvedMap']);
-            $validRows += count($mapped['contacts']);
-            $contacts = array_merge($contacts, $mapped['contacts']);
+        foreach ($this->excelChunkReader->readChunksFromLocalFile($localFilePath, $chunkSize, $columnMapping) as $chunk) {
+            $totalRows += count($chunk['rows'] ?? []);
+            $mapped     = $this->contactRowMapper->mapRows($chunk['rows'] ?? [], $chunk['resolvedMap'] ?? null);
+            $contacts   = array_merge($contacts, $mapped['contacts']);
 
             foreach ($mapped['errors'] as $error) {
                 $errorCount++;
                 $this->errorStorage->createRunError(
                     $runUid,
                     'parse',
-                    (string)($error['code'] ?? 'parse_error'),
+                    (string)($error['code']    ?? 'parse_error'),
                     (string)($error['message'] ?? 'Erreur de parsing'),
                     (string)($error['payload'] ?? '')
                 );
@@ -112,17 +120,15 @@ final class ScanImportFolderCommand extends Command
         $chunkCount = $this->runManager->createChunksFromContacts($runUid, $contacts, $chunkSize);
 
         return [
-            'totalRows' => $totalRows,
-            'validRows' => $validRows,
+            'totalRows'  => $totalRows,
+            'validRows'  => count($contacts),
             'errorCount' => $errorCount,
             'chunkCount' => $chunkCount,
         ];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function getSettings(): array
+    /** @return array<string, mixed> */
+    private function getExtSettings(): array
     {
         try {
             $settings = $this->extensionConfiguration->get('cyberimpact_sync');

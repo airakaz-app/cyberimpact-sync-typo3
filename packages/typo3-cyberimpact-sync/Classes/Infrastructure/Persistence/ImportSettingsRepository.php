@@ -7,7 +7,6 @@ namespace Cyberimpact\CyberimpactSync\Infrastructure\Persistence;
 use Cyberimpact\CyberimpactSync\Domain\Model\ImportSettings;
 use Doctrine\DBAL\ParameterType;
 use TYPO3\CMS\Core\Database\ConnectionPool;
-use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Repository for ImportSettings persistence.
@@ -20,11 +19,6 @@ final class ImportSettingsRepository
     public function __construct(
         private readonly ConnectionPool $connectionPool
     ) {}
-
-    public static function make(): self
-    {
-        return new self(GeneralUtility::makeInstance(ConnectionPool::class));
-    }
 
     /**
      * Find the first ImportSettings record (typically there's only one per instance).

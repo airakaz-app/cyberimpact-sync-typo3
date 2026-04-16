@@ -6,10 +6,6 @@ falStorageUid = 1
 # LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.incomingFolder.description
 incomingFolder = incoming/
 
-# cat=cyberimpact_sync/base; type=boolean; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.dryRunDefault.label
-# LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.dryRunDefault.description
-dryRunDefault = 1
-
 # cat=cyberimpact_sync/api; type=string; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiBaseUrl.label
 # LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.apiBaseUrl.description
 apiBaseUrl = https://api.cyberimpact.com

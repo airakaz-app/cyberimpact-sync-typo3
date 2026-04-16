@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Cyberimpact\CyberimpactSync\Service\Run;
 
-use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
+use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 
 final class RunManager
 {
@@ -15,19 +15,13 @@ final class RunManager
     ) {
     }
 
-    public function createQueuedRun(int $sourceFileUid, bool $dryRun = true, bool $exactSync = false): int
+    public function queueFromFalFile(int $sourceFileUid, bool $exactSync = false): ?int
     {
-        return $this->runStorage->createRun($sourceFileUid, $dryRun, $exactSync);
-    }
-
-    public function queueFromFalFile(int $sourceFileUid, bool $dryRun = true, bool $exactSync = false): ?int
-    {
-        $existingRun = $this->runStorage->findOpenRunBySourceFileUid($sourceFileUid);
-        if ($existingRun !== null) {
+        if ($this->runStorage->findOpenRunBySourceFileUid($sourceFileUid) !== null) {
             return null;
         }
 
-        return $this->runStorage->createRun($sourceFileUid, $dryRun, $exactSync);
+        return $this->runStorage->createRun($sourceFileUid, $exactSync);
     }
 
     public function updateRunTotalRows(int $runUid, int $totalRows): void
@@ -36,26 +30,24 @@ final class RunManager
     }
 
     /**
-     * @param array<int, array<string, string>> $contacts
+     * Déduplique par email, découpe en chunks et les persiste.
+     *
+     * @param array<int, array<string, mixed>> $contacts
      */
     public function createChunksFromContacts(int $runUid, array $contacts, int $chunkSize = 500): int
     {
-        if ($chunkSize <= 0) {
-            $chunkSize = 500;
-        }
+        $chunkSize = max(1, $chunkSize);
 
-        $contactsByEmail = [];
+        // Déduplique par email (dernière occurrence gagne)
+        $byEmail = [];
         foreach ($contacts as $contact) {
             $email = strtolower(trim((string)($contact['email'] ?? '')));
-            if ($email === '') {
-                continue;
+            if ($email !== '') {
+                $byEmail[$email] = $contact;
             }
-
-            $contactsByEmail[$email] = $contact;
         }
 
-        $contacts = array_values($contactsByEmail);
-        $chunks = array_chunk($contacts, $chunkSize);
+        $chunks = array_chunk(array_values($byEmail), $chunkSize);
         foreach ($chunks as $index => $chunkContacts) {
             $this->chunkStorage->createChunkForRun($runUid, $index, $chunkContacts);
         }

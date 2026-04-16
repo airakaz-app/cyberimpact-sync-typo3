@@ -4,7 +4,6 @@ CREATE TABLE tx_cyberimpactsync_run (
   tstamp INT DEFAULT 0 NOT NULL,
   crdate INT DEFAULT 0 NOT NULL,
   status VARCHAR(32) DEFAULT 'queued' NOT NULL,
-  dry_run TINYINT(1) DEFAULT 1 NOT NULL,
   exact_sync TINYINT(1) DEFAULT 0 NOT NULL,
   exact_sync_confirmed TINYINT(1) DEFAULT 0 NOT NULL,
   source_file_uid INT DEFAULT 0 NOT NULL,

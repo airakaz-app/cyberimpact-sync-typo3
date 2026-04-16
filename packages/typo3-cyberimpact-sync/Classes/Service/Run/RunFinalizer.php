@@ -22,32 +22,31 @@ final class RunFinalizer
     }
 
     /**
+     * Finalise le prochain run prêt à être clôturé.
+     *
      * @return array{status: string, message: string, runUid?: int, finalStatus?: string}
      */
     public function finalizeNextRun(): array
     {
         $run = $this->runStorage->findNextRunToFinalize();
         if ($run === null) {
-            return [
-                'status' => 'none',
-                'message' => 'Aucun run à finaliser.',
-            ];
+            return ['status' => 'none', 'message' => 'Aucun run à finaliser.'];
         }
 
         $runUid = (int)$run['uid'];
         $this->runStorage->updateRunStatus($runUid, 'finalizing');
 
-        $pendingChunks = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'pending');
+        $pendingChunks    = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'pending');
         $processingChunks = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'processing');
-        $failedChunks = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'failed');
-        $doneChunks = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'done');
+        $failedChunks     = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'failed');
+        $doneChunks       = $this->chunkStorage->countChunksByRunAndStatus($runUid, 'done');
 
         if ($pendingChunks > 0 || $processingChunks > 0) {
             $this->runStorage->updateRunStatus($runUid, 'processing');
 
             return [
-                'status' => 'deferred',
-                'runUid' => $runUid,
+                'status'  => 'deferred',
+                'runUid'  => $runUid,
                 'message' => sprintf(
                     'Run #%d non finalisable (pending=%d, processing=%d).',
                     $runUid,
@@ -59,62 +58,59 @@ final class RunFinalizer
 
         $exactSyncGuard = $this->checkExactSyncGuard($run);
         if ($exactSyncGuard !== null) {
-            $blockedStatus = $exactSyncGuard['status'];
-            $this->runStorage->updateRunStatus($runUid, $blockedStatus);
-            $this->writeReportForRun($runUid, $blockedStatus, $pendingChunks, $processingChunks, $doneChunks, $failedChunks);
+            $this->runStorage->updateRunStatus($runUid, $exactSyncGuard['status']);
+            $this->writeReport($runUid, $exactSyncGuard['status'], $pendingChunks, $processingChunks, $doneChunks, $failedChunks);
 
             return [
-                'status' => 'blocked',
-                'runUid' => $runUid,
+                'status'  => 'blocked',
+                'runUid'  => $runUid,
                 'message' => $exactSyncGuard['message'],
             ];
         }
 
-
+        // Recharger le run pour avoir les compteurs à jour
         $run = $this->runStorage->findRunByUid($runUid) ?? $run;
-        $exactSyncResult = null;
+
+        $exactSyncMessage = '';
         if (((int)($run['exact_sync'] ?? 0)) === 1) {
-            $exactSyncResult = $this->exactSyncService->executeForRun($run);
+            $exactSyncResult  = $this->exactSyncService->executeForRun($run);
+            $exactSyncMessage = ' ExactSync : ' . ($exactSyncResult['message'] ?? 'done');
             $run = $this->runStorage->findRunByUid($runUid) ?? $run;
         }
 
-        $upsertFailed = (int)($run['upsert_failed'] ?? 0);
-        $finalStatus = $failedChunks > 0
-            ? 'failed'
-            : (($upsertFailed > 0 || ((int)($run['unsubscribe_failed'] ?? 0)) > 0) ? 'completed_with_errors' : 'completed');
-
+        $finalStatus = $this->determineFinalStatus($run, $failedChunks);
         $this->runStorage->updateRunStatus($runUid, $finalStatus);
-        $this->writeReportForRun($runUid, $finalStatus, $pendingChunks, $processingChunks, $doneChunks, $failedChunks);
+        $this->writeReport($runUid, $finalStatus, $pendingChunks, $processingChunks, $doneChunks, $failedChunks);
 
         return [
-            'status' => 'finalized',
-            'runUid' => $runUid,
+            'status'      => 'finalized',
+            'runUid'      => $runUid,
             'finalStatus' => $finalStatus,
-            'message' => sprintf('Run #%d finalisé avec le statut "%s".%s', $runUid, $finalStatus, $exactSyncResult !== null ? (' Exact-sync: ' . ($exactSyncResult['message'] ?? 'done')) : ''),
+            'message'     => sprintf('Run #%d finalisé avec le statut "%s".%s', $runUid, $finalStatus, $exactSyncMessage),
         ];
     }
 
     /**
+     * Vérifie les garde-fous avant d'exécuter la synchronisation exacte.
+     *
      * @param array<string, mixed> $run
-     * @return array{status: string, message: string}|null
+     * @return array{status: string, message: string}|null null si tout est OK
      */
     private function checkExactSyncGuard(array $run): ?array
     {
-        $isExactSync = ((int)($run['exact_sync'] ?? 0)) === 1;
-        $isDryRun = ((int)($run['dry_run'] ?? 1)) === 1;
-        if ($isExactSync === false || $isDryRun === true) {
+        if (((int)($run['exact_sync'] ?? 0)) !== 1) {
             return null;
         }
 
-        $settings = $this->getSettings();
-        $requireConfirmation = ((int)($settings['exactSyncRequireConfirmation'] ?? 1)) === 1;
-        $maxUnsubscribeCount = (int)($settings['exactSyncMaxUnsubscribeCount'] ?? 1000);
+        $settings              = $this->getExtSettings();
+        $requireConfirmation   = ((int)($settings['exactSyncRequireConfirmation'] ?? 1)) === 1;
+        $maxUnsubscribeCount   = (int)($settings['exactSyncMaxUnsubscribeCount'] ?? 1000);
 
         if ($requireConfirmation && ((int)($run['exact_sync_confirmed'] ?? 0)) !== 1) {
             return [
-                'status' => 'blocked_confirmation',
+                'status'  => 'blocked_confirmation',
                 'message' => sprintf(
-                    'Run #%d bloqué: confirmation manuelle requise (`cyberimpact:finalize-run --confirm-run=%d`).',
+                    'Run #%d bloqué : confirmation manuelle requise (`cyberimpact:finaliser-run --confirm-run=%d`).',
                     (int)$run['uid'],
                     (int)$run['uid']
                 ),
@@ -124,9 +120,9 @@ final class RunFinalizer
         $unsubscribePlanned = (int)($run['unsubscribe_planned'] ?? 0);
         if ($unsubscribePlanned > $maxUnsubscribeCount) {
             return [
-                'status' => 'blocked_threshold',
+                'status'  => 'blocked_threshold',
                 'message' => sprintf(
-                    'Run #%d bloqué: unsubscribe_planned=%d dépasse le seuil max=%d.',
+                    'Run #%d bloqué : %d contacts à traiter dépasse le seuil maximum de %d.',
                     (int)$run['uid'],
                     $unsubscribePlanned,
                     $maxUnsubscribeCount
@@ -137,7 +133,23 @@ final class RunFinalizer
         return null;
     }
 
-    private function writeReportForRun(
+    /**
+     * @param array<string, mixed> $run
+     */
+    private function determineFinalStatus(array $run, int $failedChunks): string
+    {
+        if ($failedChunks > 0) {
+            return 'failed';
+        }
+
+        if ((int)($run['upsert_failed'] ?? 0) > 0 || (int)($run['unsubscribe_failed'] ?? 0) > 0) {
+            return 'completed_with_errors';
+        }
+
+        return 'completed';
+    }
+
+    private function writeReport(
         int $runUid,
         string $status,
         int $pendingChunks,
@@ -151,20 +163,20 @@ final class RunFinalizer
         }
 
         $run['status'] = $status;
-        $errors = $this->errorStorage->findErrorsByRunUid($runUid, 1000);
-        $summary = [
-            'total_rows' => (int)($run['total_rows'] ?? 0),
-            'processed_rows' => (int)($run['processed_rows'] ?? 0),
-            'upsert_ok' => (int)($run['upsert_ok'] ?? 0),
-            'upsert_failed' => (int)($run['upsert_failed'] ?? 0),
-            'unsubscribe_planned' => (int)($run['unsubscribe_planned'] ?? 0),
-            'unsubscribe_done' => (int)($run['unsubscribe_done'] ?? 0),
-            'unsubscribe_failed' => (int)($run['unsubscribe_failed'] ?? 0),
-            'chunks_pending' => $pendingChunks,
-            'chunks_processing' => $processingChunks,
-            'chunks_done' => $doneChunks,
-            'chunks_failed' => $failedChunks,
-            'errors_count' => count($errors),
+        $errors        = $this->errorStorage->findErrorsByRunUid($runUid, 1000);
+        $summary       = [
+            'total_rows'           => (int)($run['total_rows'] ?? 0),
+            'processed_rows'       => (int)($run['processed_rows'] ?? 0),
+            'upsert_ok'            => (int)($run['upsert_ok'] ?? 0),
+            'upsert_failed'        => (int)($run['upsert_failed'] ?? 0),
+            'unsubscribe_planned'  => (int)($run['unsubscribe_planned'] ?? 0),
+            'unsubscribe_done'     => (int)($run['unsubscribe_done'] ?? 0),
+            'unsubscribe_failed'   => (int)($run['unsubscribe_failed'] ?? 0),
+            'chunks_pending'       => $pendingChunks,
+            'chunks_processing'    => $processingChunks,
+            'chunks_done'          => $doneChunks,
+            'chunks_failed'        => $failedChunks,
+            'errors_count'         => count($errors),
         ];
 
         $reportFileUid = $this->runReportService->writeRunCsvReport($run, $summary, $errors);
@@ -176,7 +188,7 @@ final class RunFinalizer
     /**
      * @return array<string, mixed>
      */
-    private function getSettings(): array
+    private function getExtSettings(): array
     {
         try {
             $settings = $this->extensionConfiguration->get('cyberimpact_sync');

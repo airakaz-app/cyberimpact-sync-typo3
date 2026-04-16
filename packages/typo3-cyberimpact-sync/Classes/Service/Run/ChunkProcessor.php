@@ -6,8 +6,8 @@ namespace Cyberimpact\CyberimpactSync\Service\Run;
 
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ErrorStorage;
-use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
+use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Service\Cyberimpact\CyberimpactClient;
 
 final class ChunkProcessor
@@ -17,10 +17,17 @@ final class ChunkProcessor
         private readonly RunStorage $runStorage,
         private readonly ErrorStorage $errorStorage,
         private readonly CyberimpactClient $cyberimpactClient,
+        private readonly ImportSettingsRepository $importSettingsRepository,
         private readonly RunFinalizer $runFinalizer,
     ) {
     }
 
+    /**
+     * Traite le prochain chunk en attente (toutes runs confondues).
+     * Utilisé par le scheduler et la commande CLI `cyberimpact:traiter-chunk`.
+     *
+     * @return bool true si un chunk a été traité, false s'il n'y en avait aucun
+     */
     public function processNextPendingChunk(): bool
     {
         $chunk = $this->chunkStorage->findNextPendingChunk();
@@ -29,42 +36,70 @@ final class ChunkProcessor
         }
 
         $chunkUid = (int)$chunk['uid'];
-        $runUid = (int)$chunk['run_uid'];
+        $runUid   = (int)$chunk['run_uid'];
 
-        if ($this->chunkStorage->claimChunkForProcessing($chunkUid) === false) {
+        if (!$this->chunkStorage->claimChunkForProcessing($chunkUid)) {
+            // Un autre processus a pris ce chunk en charge
             return true;
         }
 
         $this->runStorage->updateRunStatus($runUid, 'processing');
+        $this->processChunk($chunkUid, $runUid, $chunk);
 
-        $contacts = $this->decodeContacts((string)($chunk['payload_json'] ?? '[]'));
-        $processedCount = count($contacts);
+        return true;
+    }
 
-        if ($processedCount === 0) {
-            $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
-            return true;
-        }
-
+    /**
+     * Traite tous les chunks en attente pour un run spécifique, puis finalise.
+     * Utilisé par le déclenchement manuel depuis le backend.
+     */
+    public function processRunChunks(int $runUid): void
+    {
         $run = $this->runStorage->findRunByUid($runUid);
-        $isDryRun = ((int)($run['dry_run'] ?? 1)) === 1;
-
-        if ($isDryRun) {
-            $this->runStorage->incrementProcessedCounters($runUid, $processedCount, $processedCount, 0);
-            $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
-            return true;
+        if ($run === null) {
+            throw new \InvalidArgumentException(sprintf('Run #%d introuvable.', $runUid));
         }
 
-        try {
-            // Load selected group from import settings (optional)
-            $importSettings = ImportSettingsRepository::make()->findFirst();
-            $selectedGroupId = $importSettings?->getSelectedGroupId();
+        if ($run['status'] !== 'queued') {
+            throw new \InvalidArgumentException(
+                sprintf('Run #%d n\'est pas en attente (statut : %s).', $runUid, $run['status'])
+            );
+        }
 
-            // Pass group to upsert (if configured and > 0)
-            $groups = [];
-            if ($selectedGroupId !== null && $selectedGroupId > 0) {
-                $groups = [(int)$selectedGroupId];
+        $this->runStorage->updateRunStatus($runUid, 'processing');
+
+        foreach ($this->chunkStorage->findChunksByRunUid($runUid) as $chunk) {
+            if ($chunk['status'] !== 'pending') {
+                continue;
             }
 
+            $chunkUid = (int)$chunk['uid'];
+            if (!$this->chunkStorage->claimChunkForProcessing($chunkUid)) {
+                continue;
+            }
+
+            $this->processChunk($chunkUid, $runUid, $chunk);
+        }
+
+        $this->runFinalizer->finalizeNextRun();
+    }
+
+    /**
+     * Traitement effectif d'un chunk : appel API Cyberimpact et mise à jour des compteurs.
+     *
+     * @param array<string, mixed> $chunk
+     */
+    private function processChunk(int $chunkUid, int $runUid, array $chunk): void
+    {
+        $contacts = $this->decodeContacts((string)($chunk['payload_json'] ?? '[]'));
+        if ($contacts === []) {
+            $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
+            return;
+        }
+
+        $groups = $this->resolveGroups();
+
+        try {
             $result = $this->cyberimpactClient->upsertMembers($contacts, $groups);
         } catch (\Throwable $exception) {
             $this->chunkStorage->updateChunkStatus($chunkUid, 'failed');
@@ -76,19 +111,19 @@ final class ChunkProcessor
                 '',
                 $chunkUid
             );
-            return true;
+            return;
         }
 
         $this->runStorage->incrementProcessedCounters(
             $runUid,
-            $processedCount,
+            count($contacts),
             (int)$result['upsertOk'],
             (int)$result['upsertFailed']
         );
 
-        if ((bool)$result['ok'] === true) {
+        if ((bool)$result['ok']) {
             $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
-            return true;
+            return;
         }
 
         $this->chunkStorage->updateChunkStatus($chunkUid, 'failed');
@@ -100,107 +135,17 @@ final class ChunkProcessor
             json_encode($contacts, JSON_UNESCAPED_UNICODE) ?: '',
             $chunkUid
         );
-
-        return true;
     }
 
     /**
-     * Traite tous les chunks en attente pour un run spécifique
+     * Retourne le tableau d'IDs de groupes configurés (vide = pas d'affectation de groupe).
+     *
+     * @return array<int, int>
      */
-    public function processRunChunks(int $runUid): void
+    private function resolveGroups(): array
     {
-        $run = $this->runStorage->findRunByUid($runUid);
-        if ($run === null) {
-            throw new \InvalidArgumentException("Run #$runUid not found");
-        }
-
-        if ($run['status'] !== 'queued') {
-            throw new \InvalidArgumentException("Run #$runUid is not in queued status (current: {$run['status']})");
-        }
-
-        // Marquer le run comme en cours de traitement
-        $this->runStorage->updateRunStatus($runUid, 'processing');
-
-        // Traiter tous les chunks du run
-        $chunks = $this->chunkStorage->findChunksByRunUid($runUid);
-        foreach ($chunks as $chunk) {
-            if ($chunk['status'] !== 'pending') {
-                continue; // Ne traiter que les chunks en attente
-            }
-
-            $chunkUid = (int)$chunk['uid'];
-
-            // Revendiquer le chunk pour traitement
-            if ($this->chunkStorage->claimChunkForProcessing($chunkUid) === false) {
-                continue; // Chunk déjà pris par un autre processus
-            }
-
-            $contacts = $this->decodeContacts((string)($chunk['payload_json'] ?? '[]'));
-            $processedCount = count($contacts);
-
-            if ($processedCount === 0) {
-                $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
-                continue;
-            }
-
-            $isDryRun = ((int)($run['dry_run'] ?? 1)) === 1;
-
-            if ($isDryRun) {
-                $this->runStorage->incrementProcessedCounters($runUid, $processedCount, $processedCount, 0);
-                $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
-                continue;
-            }
-
-            try {
-                // Load selected group from import settings (optional)
-                $importSettings = ImportSettingsRepository::make()->findFirst();
-                $selectedGroupId = $importSettings?->getSelectedGroupId();
-
-                // Pass group to upsert (if configured and > 0)
-                $groups = [];
-                if ($selectedGroupId !== null && $selectedGroupId > 0) {
-                    $groups = [(int)$selectedGroupId];
-                }
-
-                $result = $this->cyberimpactClient->upsertMembers($contacts, $groups);
-            } catch (\Throwable $exception) {
-                $this->chunkStorage->updateChunkStatus($chunkUid, 'failed');
-                $this->errorStorage->createRunError(
-                    $runUid,
-                    'upsert',
-                    'http_exception',
-                    $exception->getMessage(),
-                    '',
-                    $chunkUid
-                );
-                continue;
-            }
-
-            $this->runStorage->incrementProcessedCounters(
-                $runUid,
-                $processedCount,
-                (int)$result['upsertOk'],
-                (int)$result['upsertFailed']
-            );
-
-            if ((bool)$result['ok'] === true) {
-                $this->chunkStorage->updateChunkStatus($chunkUid, 'done');
-            } else {
-                $this->chunkStorage->updateChunkStatus($chunkUid, 'failed');
-                $this->errorStorage->createRunError(
-                    $runUid,
-                    'upsert',
-                    'upsert_failed',
-                    (string)$result['message'],
-                    json_encode($contacts, JSON_UNESCAPED_UNICODE) ?: '',
-                    $chunkUid
-                );
-            }
-        }
-
-        // Tous les chunks ont été traités
-        // Maintenant finaliser le run immédiatement
-        $this->runFinalizer->finalizeNextRun();
+        $groupId = $this->importSettingsRepository->findFirst()->getSelectedGroupId();
+        return ($groupId !== null && $groupId > 0) ? [$groupId] : [];
     }
 
     /**
@@ -209,10 +154,6 @@ final class ChunkProcessor
     private function decodeContacts(string $payloadJson): array
     {
         $decoded = json_decode($payloadJson, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-
-        return array_values(array_filter($decoded, 'is_array'));
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
     }
 }

@@ -50,7 +50,6 @@ final class RunReportService
             fputcsv($handle, ['section', 'key', 'value']);
             fputcsv($handle, ['run', 'uid', (string)($run['uid'] ?? '')]);
             fputcsv($handle, ['run', 'status', (string)($run['status'] ?? '')]);
-            fputcsv($handle, ['run', 'dry_run', (string)($run['dry_run'] ?? 0)]);
             fputcsv($handle, ['run', 'exact_sync', (string)($run['exact_sync'] ?? 0)]);
 
             foreach ($summary as $key => $value) {
