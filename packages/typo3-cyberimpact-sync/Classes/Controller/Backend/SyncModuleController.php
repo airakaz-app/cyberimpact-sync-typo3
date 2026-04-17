@@ -9,10 +9,9 @@ use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ErrorStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Service\Cyberimpact\CyberimpactClient;
-use Cyberimpact\CyberimpactSync\Service\Import\ContactRowMapper;
-use Cyberimpact\CyberimpactSync\Service\Import\ExcelChunkReader;
 use Cyberimpact\CyberimpactSync\Service\Run\ChunkProcessor;
 use Cyberimpact\CyberimpactSync\Service\Run\RunManager;
+use Cyberimpact\CyberimpactSync\Service\Run\RunPreparationService;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use TYPO3\CMS\Backend\Routing\UriBuilder;
@@ -34,8 +33,7 @@ final class SyncModuleController
         private readonly RunStorage $runStorage,
         private readonly ChunkStorage $chunkStorage,
         private readonly ErrorStorage $errorStorage,
-        private readonly ExcelChunkReader $excelChunkReader,
-        private readonly ContactRowMapper $contactRowMapper,
+        private readonly RunPreparationService $runPreparationService,
         private readonly ChunkProcessor $chunkProcessor,
     ) {
     }
@@ -273,10 +271,12 @@ final class SyncModuleController
 
             $this->chunkProcessor->processRunChunks($runUid);
 
+            $updatedRun = $this->runStorage->findRunByUid($runUid);
+
             return new JsonResponse([
                 'ok'      => true,
                 'message' => sprintf('Run #%d traité avec succès.', $runUid),
-                'status'  => 'processing',
+                'status'  => (string)($updatedRun['status'] ?? 'completed'),
             ]);
         } catch (\Throwable $e) {
             return new JsonResponse(['ok' => false, 'error' => 'Erreur : ' . $e->getMessage()], 502);
@@ -331,9 +331,13 @@ final class SyncModuleController
             return $this->alertHtml('warning', 'Un run est déjà en cours pour ce fichier.');
         }
 
-        $stats      = $this->analyzeRows($falFile->getForLocalProcessing(), $runUid);
-        $this->runManager->updateRunTotalRows($runUid, $stats['totalRows']);
-        $chunkCount = $this->runManager->createChunksFromContacts($runUid, $stats['contacts'], $chunkSize);
+        $stats      = $this->runPreparationService->prepareRun(
+            $runUid,
+            $falFile->getForLocalProcessing(),
+            $chunkSize,
+            $importSettings->getColumnMapping()
+        );
+        $chunkCount = $stats['chunkCount'];
 
         $infoTags = [];
         if ($importSettings->getSelectedGroupId() !== null && $importSettings->getSelectedGroupId() > 0) {
@@ -359,7 +363,6 @@ final class SyncModuleController
             );
         }
 
-        // Lancement immédiat : traitement des chunks + finalisation
         $processError = null;
         try {
             $this->chunkProcessor->processRunChunks($runUid);
@@ -368,7 +371,10 @@ final class SyncModuleController
         }
 
         $updatedRun  = $this->runStorage->findRunByUid($runUid);
-        $finalStatus = (string)($updatedRun['status'] ?? 'processing');
+        if ($updatedRun === null) {
+            return $this->alertHtml('danger', sprintf('Run #%d introuvable après traitement.', $runUid));
+        }
+        $finalStatus = (string)($updatedRun['status'] ?? 'completed');
 
         if ($processError !== null) {
             return $this->alertHtml(
@@ -794,43 +800,6 @@ HTML;
     // =========================================================================
     // Helpers privés
     // =========================================================================
-
-    /**
-     * Analyse le fichier Excel et retourne les statistiques et contacts extraits.
-     *
-     * @return array{totalRows: int, validRows: int, errorCount: int, contacts: array<int, array<string, mixed>>}
-     */
-    private function analyzeRows(string $localFilePath, int $runUid): array
-    {
-        $columnMapping = $this->importSettingsRepository->findFirst()->getColumnMapping();
-        $totalRows     = 0;
-        $allContacts   = [];
-        $errorCount    = 0;
-
-        foreach ($this->excelChunkReader->readChunksFromLocalFile($localFilePath, 500, $columnMapping) as $chunk) {
-            $totalRows += count($chunk['rows'] ?? []);
-            $mapped     = $this->contactRowMapper->mapRows($chunk['rows'] ?? [], $chunk['resolvedMap'] ?? null);
-
-            $allContacts = array_merge($allContacts, $mapped['contacts']);
-            foreach ($mapped['errors'] as $error) {
-                $errorCount++;
-                $this->errorStorage->createRunError(
-                    $runUid,
-                    'parse',
-                    (string)($error['code']    ?? 'parse_error'),
-                    (string)($error['message'] ?? 'Erreur de parsing'),
-                    (string)($error['payload'] ?? '')
-                );
-            }
-        }
-
-        return [
-            'totalRows'  => $totalRows,
-            'validRows'  => count($allContacts),
-            'errorCount' => $errorCount,
-            'contacts'   => $allContacts,
-        ];
-    }
 
     /** @return array<string, string> */
     private function buildApiUrls(): array

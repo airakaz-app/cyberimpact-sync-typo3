@@ -5,13 +5,11 @@ declare(strict_types=1);
 namespace Cyberimpact\CyberimpactSync\Command;
 
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
-use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ErrorStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
-use Cyberimpact\CyberimpactSync\Service\Import\ContactRowMapper;
-use Cyberimpact\CyberimpactSync\Service\Import\ExcelChunkReader;
 use Cyberimpact\CyberimpactSync\Service\Run\ChunkProcessor;
 use Cyberimpact\CyberimpactSync\Service\Run\RunFinalizer;
 use Cyberimpact\CyberimpactSync\Service\Run\RunManager;
+use Cyberimpact\CyberimpactSync\Service\Run\RunPreparationService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -31,9 +29,7 @@ final class RunFullImportCommand extends Command
         private readonly ExtensionConfiguration $extensionConfiguration,
         private readonly ImportSettingsRepository $importSettingsRepository,
         private readonly RunManager $runManager,
-        private readonly ExcelChunkReader $excelChunkReader,
-        private readonly ContactRowMapper $contactRowMapper,
-        private readonly ErrorStorage $errorStorage,
+        private readonly RunPreparationService $runPreparationService,
         private readonly ChunkProcessor $chunkProcessor,
         private readonly ChunkStorage $chunkStorage,
         private readonly RunFinalizer $runFinalizer,
@@ -67,10 +63,10 @@ final class RunFullImportCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $startTime         = time();
-        $maxSeconds        = (int)$input->getOption('max-processing-seconds');
-        $skipScan          = (bool)$input->getOption('skip-scan');
-        $skipFinalize      = (bool)$input->getOption('skip-finalize');
+        $startTime    = time();
+        $maxSeconds   = (int)$input->getOption('max-processing-seconds');
+        $skipScan     = (bool)$input->getOption('skip-scan');
+        $skipFinalize = (bool)$input->getOption('skip-finalize');
 
         $output->writeln('<comment>Démarrage du workflow d\'import…</comment>');
 
@@ -123,9 +119,9 @@ final class RunFullImportCommand extends Command
             return Command::FAILURE;
         }
 
-        $folder      = $storage->getFolder($incomingFolder);
-        $files       = $storage->getFilesInFolder($folder);
-        $queuedCount = 0;
+        $folder       = $storage->getFolder($incomingFolder);
+        $files        = $storage->getFilesInFolder($folder);
+        $queuedCount  = 0;
         $skippedCount = 0;
 
         foreach ($files as $file) {
@@ -140,7 +136,7 @@ final class RunFullImportCommand extends Command
             }
 
             $queuedCount++;
-            $stats = $this->prepareRun($runUid, $file->getForLocalProcessing(), $chunkSize, $columnMapping);
+            $stats = $this->runPreparationService->prepareRun($runUid, $file->getForLocalProcessing(), $chunkSize, $columnMapping);
 
             $output->writeln(sprintf(
                 '  ✓ Run #%d : %s (%d lignes, %d valides, %d erreurs, %d chunks)',
@@ -182,7 +178,7 @@ final class RunFullImportCommand extends Command
 
             try {
                 if (!$this->chunkProcessor->processNextPendingChunk()) {
-                    break; // Plus aucun chunk en attente
+                    break;
                 }
                 $processedCount++;
             } catch (\Throwable $e) {
@@ -212,48 +208,6 @@ final class RunFullImportCommand extends Command
         }
 
         $output->writeln(sprintf('  %d run(s) finalisé(s).', $finalizedCount));
-    }
-
-    // =========================================================================
-    // Helper : préparation d'un run depuis un fichier Excel
-    // =========================================================================
-
-    /**
-     * @param array{standard:array<string,string>,customFields:array<string,string>}|null $columnMapping
-     * @return array{totalRows: int, validRows: int, errorCount: int, chunkCount: int}
-     */
-    private function prepareRun(int $runUid, string $filePath, int $chunkSize, ?array $columnMapping): array
-    {
-        $totalRows  = 0;
-        $errorCount = 0;
-        $contacts   = [];
-
-        foreach ($this->excelChunkReader->readChunksFromLocalFile($filePath, $chunkSize, $columnMapping) as $chunk) {
-            $totalRows += count($chunk['rows'] ?? []);
-            $mapped     = $this->contactRowMapper->mapRows($chunk['rows'] ?? [], $chunk['resolvedMap'] ?? null);
-            $contacts   = array_merge($contacts, $mapped['contacts']);
-
-            foreach ($mapped['errors'] as $error) {
-                $errorCount++;
-                $this->errorStorage->createRunError(
-                    $runUid,
-                    'parse',
-                    (string)($error['code']    ?? 'parse_error'),
-                    (string)($error['message'] ?? 'Erreur de parsing'),
-                    (string)($error['payload'] ?? '')
-                );
-            }
-        }
-
-        $this->runManager->updateRunTotalRows($runUid, $totalRows);
-        $chunkCount = $this->runManager->createChunksFromContacts($runUid, $contacts, $chunkSize);
-
-        return [
-            'totalRows'  => $totalRows,
-            'validRows'  => count($contacts),
-            'errorCount' => $errorCount,
-            'chunkCount' => $chunkCount,
-        ];
     }
 
     /** @return array<string, mixed> */

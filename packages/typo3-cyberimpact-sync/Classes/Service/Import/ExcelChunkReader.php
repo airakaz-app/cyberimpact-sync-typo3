@@ -13,6 +13,8 @@ namespace Cyberimpact\CyberimpactSync\Service\Import;
  */
 final class ExcelChunkReader
 {
+    private const XLSX_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
     /**
      * @param string $localFilePath Chemin du fichier Excel
      * @param int $chunkSize Taille des chunks
@@ -186,7 +188,7 @@ final class ExcelChunkReader
             return [];
         }
 
-        $sheet->registerXPathNamespace('main', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $sheet->registerXPathNamespace('main', self::XLSX_NS);
         $xmlRows = $sheet->xpath('//main:sheetData/main:row');
         if (!is_array($xmlRows) || $xmlRows === []) {
             return [];
@@ -197,7 +199,7 @@ final class ExcelChunkReader
 
         foreach ($xmlRows as $rowIndex => $xmlRow) {
             $values = [];
-            $xmlRow->registerXPathNamespace('main', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+            $xmlRow->registerXPathNamespace('main', self::XLSX_NS);
             $cells = $xmlRow->xpath('main:c');
             if (!is_array($cells)) {
                 continue;
@@ -262,7 +264,7 @@ final class ExcelChunkReader
             return [];
         }
 
-        $sharedStrings->registerXPathNamespace('main', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $sharedStrings->registerXPathNamespace('main', self::XLSX_NS);
         $items = $sharedStrings->xpath('//main:si');
         if (!is_array($items)) {
             return [];
@@ -270,7 +272,7 @@ final class ExcelChunkReader
 
         $values = [];
         foreach ($items as $item) {
-            $item->registerXPathNamespace('main', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+            $item->registerXPathNamespace('main', self::XLSX_NS);
             $texts = $item->xpath('.//main:t');
             if (!is_array($texts)) {
                 $values[] = '';
