@@ -37,6 +37,9 @@ return [
             'trigger-run' => [
                 'target' => SyncModuleController::class . '::triggerRun',
             ],
+            'upload' => [
+                'target' => SyncModuleController::class . '::handleUploadAjax',
+            ],
         ],
     ],
 ];

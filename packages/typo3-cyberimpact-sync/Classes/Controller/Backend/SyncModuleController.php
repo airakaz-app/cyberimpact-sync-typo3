@@ -284,25 +284,87 @@ final class SyncModuleController
     }
 
     // =========================================================================
-    // Traitement de l'upload
+    // Upload : endpoint AJAX (utilisé par le formulaire JS)
+    // =========================================================================
+
+    /**
+     * Crée le run + chunks depuis un upload multipart/form-data et retourne JSON.
+     * Le traitement (appels API Cyberimpact) est déclenché séparément par triggerRun().
+     */
+    public function handleUploadAjax(ServerRequestInterface $request): ResponseInterface
+    {
+        if (strtoupper($request->getMethod()) !== 'POST') {
+            return new JsonResponse(['ok' => false, 'error' => 'Méthode non autorisée.'], 405);
+        }
+
+        try {
+            $result = $this->createRunFromUpload($request);
+            if (!$result['ok']) {
+                return new JsonResponse(['ok' => false, 'error' => $result['error']], $result['httpCode'] ?? 400);
+            }
+
+            $stats = $result['stats'];
+            return new JsonResponse([
+                'ok'         => true,
+                'runUid'     => $result['runUid'],
+                'totalRows'  => $stats['totalRows'],
+                'validRows'  => $stats['validRows'],
+                'errorCount' => $stats['errorCount'],
+                'chunkCount' => $stats['chunkCount'],
+            ]);
+        } catch (\Throwable $e) {
+            return new JsonResponse(['ok' => false, 'error' => 'Erreur serveur : ' . $e->getMessage()], 500);
+        }
+    }
+
+    // =========================================================================
+    // Upload : fallback HTML (requête POST classique sans JS)
     // =========================================================================
 
     private function handleUpload(ServerRequestInterface $request): string
     {
+        $result = $this->createRunFromUpload($request);
+        if (!$result['ok']) {
+            $alertType = ($result['httpCode'] ?? 400) === 409 ? 'warning' : 'danger';
+            return $this->alertHtml($alertType, $result['error'] ?? 'Erreur upload.');
+        }
+
+        $stats = $result['stats'];
+        if ($stats['chunkCount'] === 0) {
+            return $this->alertHtml('warning', sprintf(
+                'Run #%d créé — aucun contact valide (%d lignes, %d erreurs de parsing).',
+                $result['runUid'], $stats['totalRows'], $stats['errorCount']
+            ));
+        }
+
+        return $this->alertHtml('info', sprintf(
+            'Run #%d prêt : %d lignes, %d contacts (%d chunks). Le traitement démarrera automatiquement.',
+            $result['runUid'], $stats['totalRows'], $stats['validRows'], $stats['chunkCount']
+        ));
+    }
+
+    // =========================================================================
+    // Logique commune : stockage FAL + création run + préparation chunks
+    // =========================================================================
+
+    /**
+     * @return array{ok: bool, error?: string, httpCode?: int, runUid?: int, stats?: array{totalRows: int, validRows: int, errorCount: int, chunkCount: int}}
+     */
+    private function createRunFromUpload(ServerRequestInterface $request): array
+    {
         $uploadedFile = ($request->getUploadedFiles())['source_file'] ?? null;
         if ($uploadedFile === null || $uploadedFile->getError() !== UPLOAD_ERR_OK) {
-            return $this->alertHtml('danger', 'Fichier invalide ou erreur lors de l\'upload.');
+            return ['ok' => false, 'error' => 'Fichier invalide ou erreur lors de l\'upload.', 'httpCode' => 400];
         }
 
         $originalName = $uploadedFile->getClientFilename() ?? '';
         if (strtolower(pathinfo($originalName, PATHINFO_EXTENSION)) !== 'xlsx') {
-            return $this->alertHtml('danger', 'Seuls les fichiers .xlsx sont autorisés.');
+            return ['ok' => false, 'error' => 'Seuls les fichiers .xlsx sont autorisés.', 'httpCode' => 400];
         }
 
-        $importSettings = $this->importSettingsRepository->findFirst();
         $parsedBody     = (array)$request->getParsedBody();
         $exactSync      = isset($parsedBody['exact_sync']) && (string)($parsedBody['exact_sync']) === '1';
-
+        $importSettings = $this->importSettingsRepository->findFirst();
         $extSettings    = $this->getExtSettings();
         $storageUid     = (int)($extSettings['falStorageUid']  ?? 1);
         $incomingFolder = (string)($extSettings['incomingFolder'] ?? 'incoming/');
@@ -310,7 +372,7 @@ final class SyncModuleController
 
         $storage = $this->storageRepository->findByUid($storageUid);
         if (!$storage) {
-            return $this->alertHtml('danger', 'Stockage FAL introuvable (uid=' . $storageUid . ').');
+            return ['ok' => false, 'error' => 'Stockage FAL introuvable (uid=' . $storageUid . ').', 'httpCode' => 500];
         }
 
         if (!$storage->hasFolder($incomingFolder)) {
@@ -328,82 +390,17 @@ final class SyncModuleController
 
         $runUid = $this->runManager->queueFromFalFile($falFile->getUid(), $exactSync);
         if ($runUid === null) {
-            return $this->alertHtml('warning', 'Un run est déjà en cours pour ce fichier.');
+            return ['ok' => false, 'error' => 'Un run est déjà en cours pour ce fichier.', 'httpCode' => 409];
         }
 
-        $stats      = $this->runPreparationService->prepareRun(
+        $stats = $this->runPreparationService->prepareRun(
             $runUid,
             $falFile->getForLocalProcessing(),
             $chunkSize,
             $importSettings->getColumnMapping()
         );
-        $chunkCount = $stats['chunkCount'];
 
-        $infoTags = [];
-        if ($importSettings->getSelectedGroupId() !== null && $importSettings->getSelectedGroupId() > 0) {
-            $infoTags[] = 'groupe #' . $importSettings->getSelectedGroupId();
-        }
-        if ($importSettings->getColumnMapping() !== null) {
-            $infoTags[] = 'mapping configuré';
-        }
-        if ($exactSync) {
-            $infoTags[] = 'sync exacte (' . htmlspecialchars($importSettings->getMissingContactsAction()) . ')';
-        }
-        $infoStr = $infoTags !== [] ? ' — ' . implode(', ', $infoTags) : '';
-
-        if ($chunkCount === 0) {
-            return $this->alertHtml(
-                'warning',
-                sprintf(
-                    'Run #%d créé mais aucun contact valide trouvé dans le fichier (%d lignes lues, %d erreurs de parsing).',
-                    $runUid,
-                    $stats['totalRows'],
-                    $stats['errorCount']
-                )
-            );
-        }
-
-        $processError = null;
-        try {
-            $this->chunkProcessor->processRunChunks($runUid);
-        } catch (\Throwable $e) {
-            $processError = $e->getMessage();
-        }
-
-        $updatedRun  = $this->runStorage->findRunByUid($runUid);
-        if ($updatedRun === null) {
-            return $this->alertHtml('danger', sprintf('Run #%d introuvable après traitement.', $runUid));
-        }
-        $finalStatus = (string)($updatedRun['status'] ?? 'completed');
-
-        if ($processError !== null) {
-            return $this->alertHtml(
-                'warning',
-                sprintf(
-                    'Run #%d créé (%d lignes, %d contacts, %d chunks) mais erreur durant le traitement : %s',
-                    $runUid,
-                    $stats['totalRows'],
-                    $stats['validRows'],
-                    $chunkCount,
-                    htmlspecialchars($processError)
-                )
-            );
-        }
-
-        return $this->alertHtml(
-            'success',
-            sprintf(
-                'Run #%d terminé : %d lignes, %d contacts importés dans Cyberimpact'
-                . ' (%d ok / %d échec)%s. Statut : <strong>%s</strong>',
-                $runUid,
-                $stats['totalRows'],
-                $stats['validRows'],
-                (int)($updatedRun['upsert_ok']     ?? 0),
-                (int)($updatedRun['upsert_failed']  ?? 0),
-                $infoStr,
-                htmlspecialchars($finalStatus)
-            )
-        );
+        return ['ok' => true, 'runUid' => $runUid, 'stats' => $stats];
     }
 
     // =========================================================================
@@ -439,7 +436,8 @@ final class SyncModuleController
             $groupBadge        = 'Aucun';
         }
 
-        $dataAttrs = ' data-url-test-token="'          . htmlspecialchars($apiUrls['testToken']        ?? '') . '"'
+        $dataAttrs = ' data-url-upload="'                . htmlspecialchars($apiUrls['upload']            ?? '') . '"'
+            . ' data-url-test-token="'                . htmlspecialchars($apiUrls['testToken']        ?? '') . '"'
             . ' data-url-cyberimpact-fields="'         . htmlspecialchars($apiUrls['cyberimpactFields'] ?? '') . '"'
             . ' data-url-cyberimpact-groups="'         . htmlspecialchars($apiUrls['cyberimpactGroups'] ?? '') . '"'
             . ' data-url-column-mapping="'             . htmlspecialchars($apiUrls['columnMapping']     ?? '') . '"'
@@ -626,7 +624,8 @@ final class SyncModuleController
                     &nbsp;|&nbsp; Action contacts manquants : <strong>{$missingActionLabel}</strong>
                 </div>
 
-                <form method="post" enctype="multipart/form-data">
+                <div id="cyberimpact-upload-flash"></div>
+                <form id="upload_form" method="post" enctype="multipart/form-data">
                     <div class="cyberimpact-form-group" style="max-width:450px">
                         <label for="source_file">Fichier Excel (.xlsx)</label>
                         <input class="cyberimpact-form-control" type="file" id="source_file"
@@ -805,6 +804,7 @@ HTML;
     private function buildApiUrls(): array
     {
         return [
+            'upload'           => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.upload'),
             'testToken'        => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.test-token'),
             'cyberimpactFields' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-fields'),
             'cyberimpactGroups' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.cyberimpact-groups'),

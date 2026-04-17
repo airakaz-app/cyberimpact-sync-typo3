@@ -10,6 +10,7 @@
 
     // ==================== API URLs ====================
     const apiUrls = {
+        upload:           mainContainer.dataset.urlUpload,
         testToken:        mainContainer.dataset.urlTestToken,
         cyberimpactFields: mainContainer.dataset.urlCyberimpactFields,
         cyberimpactGroups: mainContainer.dataset.urlCyberimpactGroups,
@@ -330,41 +331,155 @@
         });
     }
 
-    // ==================== Trigger Run ====================
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('trigger-run-btn')) {
-            const runUid = e.target.dataset.runUid;
-            const btn = e.target;
-            const originalText = btn.textContent;
-            
-            btn.disabled = true;
-            btn.textContent = '⏳ Traitement...';
-            
-            fetch(apiUrls.triggerRun || '', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-Token': document.querySelector('input[name="_token"]')?.value || ''
-                },
-                body: JSON.stringify({ run_uid: runUid })
-            }).then(response => response.json())
-            .then(data => {
-                if (data.ok) {
-                    alert('✓ Run #' + runUid + ' lancé avec succès !');
-                    window.location.reload();
+    // ==================== Upload automatique (AJAX 2 phases) ====================
+    const uploadForm    = document.getElementById('upload_form');
+    const uploadFlash   = document.getElementById('cyberimpact-upload-flash');
+    const uploadSubmit  = uploadForm?.querySelector('button[type="submit"]');
+
+    if (uploadForm && apiUrls.upload) {
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = uploadForm.querySelector('input[type="file"]');
+            if (!fileInput?.files?.length) {
+                showUploadFlash('danger', 'Veuillez sélectionner un fichier .xlsx.');
+                return;
+            }
+
+            const origLabel = uploadSubmit?.textContent ?? '';
+            setUploadBusy(true, '⏳ Upload en cours…');
+
+            // ── Phase 1 : envoi du fichier, création run + chunks ──
+            let uploadData;
+            try {
+                const resp = await fetch(apiUrls.upload, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: new FormData(uploadForm),
+                });
+                uploadData = await resp.json();
+            } catch (err) {
+                showUploadFlash('danger', '❌ Erreur réseau lors de l\'upload : ' + err.message);
+                setUploadBusy(false, origLabel);
+                return;
+            }
+
+            if (!uploadData.ok) {
+                showUploadFlash('danger', '❌ ' + (uploadData.error || 'Erreur upload inconnue.'));
+                setUploadBusy(false, origLabel);
+                return;
+            }
+
+            if (uploadData.chunkCount === 0) {
+                showUploadFlash('warning',
+                    '⚠ Run #' + uploadData.runUid + ' créé — aucun contact valide trouvé'
+                    + ' (' + uploadData.totalRows + ' lignes, '
+                    + uploadData.errorCount + ' erreurs de parsing).'
+                );
+                setUploadBusy(false, origLabel);
+                fileInput.value = '';
+                return;
+            }
+
+            // ── Phase 2 : traitement immédiat via API Cyberimpact ──
+            setUploadBusy(true, '⏳ Synchronisation Cyberimpact…');
+            showUploadFlash('info',
+                '⏳ Run #' + uploadData.runUid + ' créé — '
+                + uploadData.validRows + ' contacts, '
+                + uploadData.chunkCount + ' chunk(s). Envoi vers Cyberimpact…'
+            );
+
+            try {
+                const triggerResp = await fetch(apiUrls.triggerRun, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({ run_uid: uploadData.runUid }),
+                });
+                const triggerData = await triggerResp.json();
+
+                if (triggerData.ok) {
+                    showUploadFlash('success',
+                        '✓ Run #' + uploadData.runUid + ' synchronisé avec Cyberimpact.'
+                        + ' Statut : <strong>' + escapeHtml(triggerData.status || 'completed') + '</strong>'
+                    );
                 } else {
-                    alert('❌ Erreur: ' + (data.error || 'Erreur inconnue'));
-                    btn.disabled = false;
-                    btn.textContent = originalText;
+                    showUploadFlash('warning',
+                        '⚠ Run #' + uploadData.runUid + ' créé mais erreur lors du traitement : '
+                        + escapeHtml(triggerData.error || 'Erreur inconnue.')
+                    );
                 }
-            }).catch(err => {
-                console.error('Erreur:', err);
-                alert('❌ Erreur de connexion');
-                btn.disabled = false;
-                btn.textContent = originalText;
-            });
-        }
+            } catch (err) {
+                showUploadFlash('warning',
+                    '⚠ Run #' + uploadData.runUid + ' créé mais erreur réseau lors du traitement : '
+                    + escapeHtml(err.message)
+                );
+            }
+
+            setUploadBusy(false, origLabel);
+            fileInput.value = '';
+            refreshRunsList();
+        });
+    }
+
+    // ==================== Relancer un run bloqué (filet de sécurité) ====================
+    document.addEventListener('click', function(e) {
+        if (!e.target.classList.contains('trigger-run-btn')) return;
+
+        const runUid      = e.target.dataset.runUid;
+        const btn         = e.target;
+        const originalTxt = btn.textContent;
+
+        btn.disabled    = true;
+        btn.textContent = '⏳ Traitement…';
+
+        fetch(apiUrls.triggerRun || '', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body:    JSON.stringify({ run_uid: runUid }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                refreshRunsList();
+            } else {
+                alert('❌ Erreur : ' + (data.error || 'Erreur inconnue'));
+                btn.disabled    = false;
+                btn.textContent = originalTxt;
+            }
+        })
+        .catch(err => {
+            alert('❌ Erreur de connexion : ' + err.message);
+            btn.disabled    = false;
+            btn.textContent = originalTxt;
+        });
     });
+
+    // ==================== Helpers upload ====================
+    function setUploadBusy(busy, label) {
+        if (!uploadSubmit) return;
+        uploadSubmit.disabled    = busy;
+        uploadSubmit.textContent = label;
+    }
+
+    function showUploadFlash(type, html) {
+        if (!uploadFlash) return;
+        const cls = {
+            success: 'cyberimpact-alert cyberimpact-alert-success',
+            warning: 'alert alert-warning',
+            danger:  'alert alert-danger',
+            info:    'cyberimpact-alert cyberimpact-alert-info',
+        }[type] ?? 'alert alert-info';
+        uploadFlash.innerHTML = '<div class="' + cls + '" style="margin-bottom:1rem">' + html + '</div>';
+        uploadFlash.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function refreshRunsList() {
+        // Recharge la page entière pour afficher la liste mise à jour
+        window.location.reload();
+    }
 
     // ==================== Helpers ====================
     function showMessage(el, text, type) {
