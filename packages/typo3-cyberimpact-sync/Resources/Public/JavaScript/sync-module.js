@@ -17,6 +17,7 @@
         columnMapping:    mainContainer.dataset.urlColumnMapping,
         selectedGroup:    mainContainer.dataset.urlSelectedGroup,
         triggerRun:       mainContainer.dataset.urlTriggerRun,
+        processNextChunk: mainContainer.dataset.urlProcessNextChunk,
     };
 
     const exactSyncCardBody = document.querySelector('[data-url-exact-sync-settings]');
@@ -381,42 +382,14 @@
                 return;
             }
 
-            // ── Phase 2 : traitement immédiat via API Cyberimpact ──
-            setUploadBusy(true, '⏳ Synchronisation Cyberimpact…');
+            // ── Phase 2 : traitement chunk par chunk (polling) ──
             showUploadFlash('info',
                 '⏳ Run #' + uploadData.runUid + ' créé — '
                 + uploadData.validRows + ' contacts, '
                 + uploadData.chunkCount + ' chunk(s). Envoi vers Cyberimpact…'
             );
 
-            try {
-                const triggerResp = await fetch(apiUrls.triggerRun, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    body: JSON.stringify({ run_uid: uploadData.runUid }),
-                });
-                const triggerData = await triggerResp.json();
-
-                if (triggerData.ok) {
-                    showUploadFlash('success',
-                        '✓ Run #' + uploadData.runUid + ' synchronisé avec Cyberimpact.'
-                        + ' Statut : <strong>' + escapeHtml(triggerData.status || 'completed') + '</strong>'
-                    );
-                } else {
-                    showUploadFlash('warning',
-                        '⚠ Run #' + uploadData.runUid + ' créé mais erreur lors du traitement : '
-                        + escapeHtml(triggerData.error || 'Erreur inconnue.')
-                    );
-                }
-            } catch (err) {
-                showUploadFlash('warning',
-                    '⚠ Run #' + uploadData.runUid + ' créé mais erreur réseau lors du traitement : '
-                    + escapeHtml(err.message)
-                );
-            }
+            await processRunByPolling(uploadData.runUid, uploadData.chunkCount, origLabel);
 
             setUploadBusy(false, origLabel);
             fileInput.value = '';
@@ -425,37 +398,63 @@
     }
 
     // ==================== Relancer un run bloqué (filet de sécurité) ====================
-    document.addEventListener('click', function(e) {
+    document.addEventListener('click', async function(e) {
         if (!e.target.classList.contains('trigger-run-btn')) return;
 
-        const runUid      = e.target.dataset.runUid;
+        const runUid      = parseInt(e.target.dataset.runUid, 10);
         const btn         = e.target;
         const originalTxt = btn.textContent;
 
         btn.disabled    = true;
         btn.textContent = '⏳ Traitement…';
 
-        fetch(apiUrls.triggerRun || '', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body:    JSON.stringify({ run_uid: runUid }),
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.ok) {
-                refreshRunsList();
-            } else {
-                alert('❌ Erreur : ' + (data.error || 'Erreur inconnue'));
-                btn.disabled    = false;
-                btn.textContent = originalTxt;
-            }
-        })
-        .catch(err => {
-            alert('❌ Erreur de connexion : ' + err.message);
-            btn.disabled    = false;
-            btn.textContent = originalTxt;
-        });
+        await processRunByPolling(runUid, null, originalTxt, btn);
+        refreshRunsList();
     });
+
+    // ==================== Polling chunk-par-chunk ====================
+    async function processRunByPolling(runUid, totalHint, origLabel, btnEl) {
+        let done       = false;
+        let lastStatus = 'processing';
+        let total      = totalHint || '?';
+
+        try {
+            while (!done) {
+                const resp = await fetch(apiUrls.processNextChunk, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body:    JSON.stringify({ run_uid: runUid }),
+                });
+                const data = await resp.json();
+
+                if (!data.ok) {
+                    showUploadFlash('warning',
+                        '⚠ Run #' + runUid + ' — erreur chunk : '
+                        + escapeHtml(data.error || 'Erreur inconnue.')
+                    );
+                    if (btnEl) { btnEl.disabled = false; btnEl.textContent = origLabel; }
+                    return;
+                }
+
+                done       = data.done;
+                lastStatus = data.status || 'processing';
+                total      = data.total  || total;
+                const label = '⏳ Chunk ' + data.processed + '/' + total + '…';
+                if (btnEl) { btnEl.textContent = label; }
+                else       { setUploadBusy(true, label); }
+            }
+
+            showUploadFlash('success',
+                '✓ Run #' + runUid + ' synchronisé.'
+                + ' Statut : <strong>' + escapeHtml(lastStatus) + '</strong>'
+            );
+        } catch (err) {
+            showUploadFlash('warning',
+                '⚠ Run #' + runUid + ' — erreur réseau : ' + escapeHtml(err.message)
+            );
+            if (btnEl) { btnEl.disabled = false; btnEl.textContent = origLabel; }
+        }
+    }
 
     // ==================== Helpers upload ====================
     function setUploadBusy(busy, label) {

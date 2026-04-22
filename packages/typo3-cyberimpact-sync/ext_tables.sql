@@ -34,6 +34,9 @@ CREATE TABLE tx_cyberimpactsync_chunk (
 
 CREATE INDEX idx_cyberimpactsync_chunk_run_status_idx ON tx_cyberimpactsync_chunk (run_uid, status, chunk_index);
 
+-- Index pour findNextPendingChunk() (scheduler global, ORDER BY crdate, uid)
+CREATE INDEX idx_cyberimpactsync_chunk_status_crdate ON tx_cyberimpactsync_chunk (status, crdate, uid);
+
 CREATE TABLE tx_cyberimpactsync_error (
   uid INT AUTO_INCREMENT PRIMARY KEY,
   pid INT DEFAULT 0 NOT NULL,

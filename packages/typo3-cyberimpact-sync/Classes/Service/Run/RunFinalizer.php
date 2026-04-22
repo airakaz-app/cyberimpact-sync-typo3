@@ -93,6 +93,11 @@ final class RunFinalizer
     /**
      * Vérifie les garde-fous avant d'exécuter la synchronisation exacte.
      *
+     * Note : le contrôle de seuil (exactSyncMaxUnsubscribeCount) est désormais effectué
+     * dans ExactSyncService::executeForRun(), APRÈS le calcul réel du nombre de contacts
+     * manquants, ce qui garantit un blocage fiable. Le contrôle ici se limitait à
+     * unsubscribe_planned=0 (toujours faux) et a donc été supprimé.
+     *
      * @param array<string, mixed> $run
      * @return array{status: string, message: string}|null null si tout est OK
      */
@@ -102,9 +107,8 @@ final class RunFinalizer
             return null;
         }
 
-        $settings              = $this->getExtSettings();
-        $requireConfirmation   = ((int)($settings['exactSyncRequireConfirmation'] ?? 1)) === 1;
-        $maxUnsubscribeCount   = (int)($settings['exactSyncMaxUnsubscribeCount'] ?? 1000);
+        $settings            = $this->getExtSettings();
+        $requireConfirmation = ((int)($settings['exactSyncRequireConfirmation'] ?? 1)) === 1;
 
         if ($requireConfirmation && ((int)($run['exact_sync_confirmed'] ?? 0)) !== 1) {
             return [
@@ -113,19 +117,6 @@ final class RunFinalizer
                     'Run #%d bloqué : confirmation manuelle requise (`cyberimpact:finaliser-run --confirm-run=%d`).',
                     (int)$run['uid'],
                     (int)$run['uid']
-                ),
-            ];
-        }
-
-        $unsubscribePlanned = (int)($run['unsubscribe_planned'] ?? 0);
-        if ($unsubscribePlanned > $maxUnsubscribeCount) {
-            return [
-                'status'  => 'blocked_threshold',
-                'message' => sprintf(
-                    'Run #%d bloqué : %d contacts à traiter dépasse le seuil maximum de %d.',
-                    (int)$run['uid'],
-                    $unsubscribePlanned,
-                    $maxUnsubscribeCount
                 ),
             ];
         }

@@ -50,6 +50,62 @@ final class ChunkProcessor
     }
 
     /**
+     * Traite UN seul chunk en attente pour un run, puis retourne la progression.
+     * Utilisé par le polling JS (processNextChunk).
+     *
+     * @return array{done: bool, status: string, processed: int, total: int}
+     */
+    public function processOneChunkForRun(int $runUid): array
+    {
+        $run = $this->runStorage->findRunByUid($runUid);
+        if ($run === null) {
+            throw new \InvalidArgumentException(sprintf('Run #%d introuvable.', $runUid));
+        }
+
+        $runStatus = (string)($run['status'] ?? '');
+        if ($runStatus === 'queued') {
+            $this->runStorage->updateRunStatus($runUid, 'processing');
+        } elseif ($runStatus !== 'processing') {
+            throw new \InvalidArgumentException(
+                sprintf('Run #%d ne peut pas être traité (statut : %s).', $runUid, $runStatus)
+            );
+        }
+
+        // 1 requête GROUP BY au lieu de 3 COUNT séparés
+        $counts    = $this->chunkStorage->countChunksByRunGrouped($runUid);
+        $total     = $counts['total'];
+        $processed = $counts['done'] + $counts['failed'];
+
+        $chunk = $this->chunkStorage->findNextPendingChunkForRun($runUid);
+
+        if ($chunk === null) {
+            $this->runFinalizer->finalizeNextRun();
+            $updatedRun = $this->runStorage->findRunByUid($runUid);
+            return [
+                'done'      => true,
+                'status'    => (string)($updatedRun['status'] ?? 'completed'),
+                'processed' => $processed,
+                'total'     => $total,
+            ];
+        }
+
+        $chunkUid = (int)$chunk['uid'];
+        if ($this->chunkStorage->claimChunkForProcessing($chunkUid)) {
+            $this->processChunk($chunkUid, $runUid, $chunk);
+            // Re-count après traitement (1 requête)
+            $counts    = $this->chunkStorage->countChunksByRunGrouped($runUid);
+            $processed = $counts['done'] + $counts['failed'];
+        }
+
+        return [
+            'done'      => false,
+            'status'    => 'processing',
+            'processed' => $processed,
+            'total'     => $total,
+        ];
+    }
+
+    /**
      * Traite tous les chunks en attente pour un run spécifique, puis finalise.
      * Utilisé par le déclenchement manuel depuis le backend.
      */

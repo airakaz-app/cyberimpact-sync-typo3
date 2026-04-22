@@ -8,6 +8,7 @@ use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ImportSettingsRepository;
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\RunStorage;
 use Cyberimpact\CyberimpactSync\Service\Cyberimpact\CyberimpactClient;
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 
 final class ExactSyncService
 {
@@ -16,6 +17,7 @@ final class ExactSyncService
         private readonly RunStorage $runStorage,
         private readonly CyberimpactClient $cyberimpactClient,
         private readonly ImportSettingsRepository $importSettingsRepository,
+        private readonly ExtensionConfiguration $extensionConfiguration,
     ) {
     }
 
@@ -34,15 +36,20 @@ final class ExactSyncService
             return ['planned' => 0, 'done' => 0, 'failed' => 0, 'message' => 'UID de run invalide.'];
         }
 
-        $action              = $this->importSettingsRepository->findFirst()->getMissingContactsAction();
-        $chunks              = $this->chunkStorage->findChunksByRunUid($runUid);
-        $localEmails         = $this->extractLocalEmailsFromChunks($chunks);
-        $remoteEmailToId     = $this->cyberimpactClient->fetchSubscribedContacts();
+        $settings  = $this->getExtSettings();
+        $chunkSize = max(1, (int)($settings['chunkSize'] ?? 500));
+        $maxCount  = max(1, (int)($settings['exactSyncMaxUnsubscribeCount'] ?? 1000));
+
+        $action          = $this->importSettingsRepository->findFirst()->getMissingContactsAction();
+        $chunks          = $this->chunkStorage->findChunksByRunUid($runUid);
+        $localEmails     = $this->extractLocalEmailsFromChunks($chunks);
+        $remoteEmailToId = $this->cyberimpactClient->fetchSubscribedContacts();
 
         if ($remoteEmailToId === []) {
-            return ['planned' => 0, 'done' => 0, 'failed' => 0, 'message' => 'Aucun contact abonné trouvé dans Cyberimpact.'];
+            return ['planned' => 0, 'done' => 0, 'failed' => 0, 'message' => 'Aucun contact abonné actif trouvé dans Cyberimpact.'];
         }
 
+        // Contacts abonnés actifs absents du fichier importé → à traiter
         $missingEmails = array_values(array_diff(array_keys($remoteEmailToId), $localEmails));
         $planned       = count($missingEmails);
 
@@ -51,27 +58,67 @@ final class ExactSyncService
             return ['planned' => 0, 'done' => 0, 'failed' => 0, 'message' => 'Aucun contact manquant à synchroniser.'];
         }
 
-        if ($action === 'delete') {
-            $ids = [];
-            foreach ($missingEmails as $email) {
-                $memberId = $remoteEmailToId[$email] ?? null;
-                $ids[]    = $memberId !== null ? $memberId : $email;
-            }
-            $result = $this->cyberimpactClient->deleteMembers($ids);
-        } else {
-            $result = $this->cyberimpactClient->unsubscribeMembers($missingEmails);
+        // Sécurité : bloquer si le nombre dépasse le seuil configuré
+        if ($planned > $maxCount) {
+            $this->runStorage->setUnsubscribeCounters($runUid, $planned, 0, 0);
+            return [
+                'planned' => $planned,
+                'done'    => 0,
+                'failed'  => 0,
+                'message' => sprintf(
+                    'Bloqué : %d contacts à traiter dépasse le seuil de sécurité (%d). '
+                    . 'Augmentez exactSyncMaxUnsubscribeCount si intentionnel.',
+                    $planned,
+                    $maxCount
+                ),
+            ];
         }
 
-        $done   = (int)$result['ok'];
-        $failed = (int)$result['failed'];
-        $this->runStorage->setUnsubscribeCounters($runUid, $planned, $done, $failed);
+        // Traitement chunk par chunk pour éviter les batchs massifs
+        $emailChunks = array_chunk($missingEmails, $chunkSize);
+        $totalDone   = 0;
+        $totalFailed = 0;
+        $lastMessage = '';
+
+        foreach ($emailChunks as $emailChunk) {
+            if ($action === 'delete') {
+                $ids = [];
+                foreach ($emailChunk as $email) {
+                    $memberId = $remoteEmailToId[$email] ?? null;
+                    $ids[]    = $memberId !== null ? (int)$memberId : $email;
+                }
+                $result = $this->cyberimpactClient->deleteMembers($ids);
+            } else {
+                $result = $this->cyberimpactClient->unsubscribeMembers($emailChunk);
+            }
+
+            $totalDone   += (int)$result['ok'];
+            $totalFailed += (int)$result['failed'];
+            $lastMessage  = (string)$result['message'];
+
+            // Mise à jour progressive des compteurs
+            $this->runStorage->setUnsubscribeCounters($runUid, $planned, $totalDone, $totalFailed);
+        }
 
         return [
             'planned' => $planned,
-            'done'    => $done,
-            'failed'  => $failed,
-            'message' => (string)$result['message'],
+            'done'    => $totalDone,
+            'failed'  => $totalFailed,
+            'message' => $lastMessage,
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getExtSettings(): array
+    {
+        try {
+            $settings = $this->extensionConfiguration->get('cyberimpact_sync');
+            return is_array($settings) ? $settings : [];
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     /**

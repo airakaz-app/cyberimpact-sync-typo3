@@ -37,6 +37,9 @@ return [
             'trigger-run' => [
                 'target' => SyncModuleController::class . '::triggerRun',
             ],
+            'process-next-chunk' => [
+                'target' => SyncModuleController::class . '::processNextChunk',
+            ],
             'upload' => [
                 'target' => SyncModuleController::class . '::handleUploadAjax',
             ],

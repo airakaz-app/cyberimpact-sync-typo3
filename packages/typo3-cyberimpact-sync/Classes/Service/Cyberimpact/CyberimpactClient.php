@@ -126,7 +126,9 @@ final class CyberimpactClient
     }
 
     /**
-     * Récupère tous les contacts abonnés sous forme email → memberId.
+     * Récupère uniquement les contacts actifs (abonnés) sous forme email → memberId.
+     * On exclut volontairement les désabonnés et supprimés : ils ne font pas partie
+     * de la liste "active" à synchroniser.
      *
      * @return array<string, int|null>
      */
@@ -148,7 +150,7 @@ final class CyberimpactClient
                 'GET',
                 [
                     'headers' => $this->buildHeaders($ctx['token'], 'fetch_members_p' . $page),
-                    'query'   => ['page' => $page, 'limit' => $limit, 'status' => 'all'],
+                    'query'   => ['page' => $page, 'limit' => $limit, 'status' => 'subscribed'],
                     'timeout' => $ctx['timeout'],
                 ],
                 $ctx['settings']

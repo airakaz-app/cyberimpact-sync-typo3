@@ -283,6 +283,28 @@ final class SyncModuleController
         }
     }
 
+    /** Traite UN chunk en attente pour un run et retourne la progression (polling JS). */
+    public function processNextChunk(ServerRequestInterface $request): ResponseInterface
+    {
+        if (strtoupper($request->getMethod()) !== 'POST') {
+            return new JsonResponse(['error' => 'Méthode non autorisée.'], 405);
+        }
+
+        try {
+            $body   = json_decode($request->getBody()->getContents(), true);
+            $runUid = (int)($body['run_uid'] ?? 0);
+
+            if ($runUid <= 0) {
+                return new JsonResponse(['error' => 'UID de run invalide.'], 400);
+            }
+
+            $result = $this->chunkProcessor->processOneChunkForRun($runUid);
+            return new JsonResponse(['ok' => true] + $result);
+        } catch (\Throwable $e) {
+            return new JsonResponse(['ok' => false, 'error' => 'Erreur : ' . $e->getMessage()], 502);
+        }
+    }
+
     // =========================================================================
     // Upload : endpoint AJAX (utilisé par le formulaire JS)
     // =========================================================================
@@ -393,6 +415,11 @@ final class SyncModuleController
             return ['ok' => false, 'error' => 'Un run est déjà en cours pour ce fichier.', 'httpCode' => 409];
         }
 
+        // Cocher "Synchronisation exacte" dans l'UI vaut confirmation explicite de l'utilisateur.
+        if ($exactSync) {
+            $this->runStorage->markExactSyncConfirmed($runUid);
+        }
+
         $stats = $this->runPreparationService->prepareRun(
             $runUid,
             $falFile->getForLocalProcessing(),
@@ -443,6 +470,7 @@ final class SyncModuleController
             . ' data-url-column-mapping="'             . htmlspecialchars($apiUrls['columnMapping']     ?? '') . '"'
             . ' data-url-selected-group="'             . htmlspecialchars($apiUrls['selectedGroup']     ?? '') . '"'
             . ' data-url-trigger-run="'                . htmlspecialchars($apiUrls['triggerRun']        ?? '') . '"'
+            . ' data-url-process-next-chunk="'         . htmlspecialchars($apiUrls['processNextChunk']  ?? '') . '"'
             . ' data-token-validated="'                . $tokenValidated . '"'
             . ' data-current-mapping="'                . $mappingJson . '"'
             . ' data-current-group-id="'               . $currentGroupId . '"';
@@ -643,8 +671,7 @@ final class SyncModuleController
                                     Après l'import, les contacts présents dans Cyberimpact
                                     mais absents du fichier seront traités avec l'action configurée :
                                     <strong>{$missingActionLabel}</strong>.<br>
-                                    Requiert une confirmation manuelle via CLI
-                                    si l'option est activée dans la configuration.
+                                    Cocher cette case vaut confirmation — l'action sera exécutée automatiquement.
                                 </span>
                             </span>
                         </label>
@@ -725,7 +752,7 @@ HTML;
         foreach ($rows as $run) {
             $runUid     = (int)($run['uid']    ?? 0);
             $status     = (string)($run['status'] ?? '');
-            $triggerBtn = $status === 'queued'
+            $triggerBtn = in_array($status, ['queued', 'processing'], true)
                 ? ' <button class="btn btn-sm btn-warning trigger-run-btn" data-run-uid="' . $runUid . '" style="margin-left:.5rem">▶ Relancer</button>'
                 : '';
 
@@ -812,6 +839,7 @@ HTML;
             'selectedGroup'    => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.selected-group'),
             'exactSyncSettings' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.exact-sync-settings'),
             'triggerRun'       => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.trigger-run'),
+            'processNextChunk' => (string)$this->uriBuilder->buildUriFromRoute('tools_cyberimpactsync.process-next-chunk'),
         ];
     }
 

@@ -52,12 +52,20 @@ staleChunkTimeoutSeconds = 900
 
 # cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollMaxAttempts.label
 # LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollMaxAttempts.description
-batchPollMaxAttempts = 30
+batchPollMaxAttempts = 40
 
 # cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollIntervalMs.label
 # LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollIntervalMs.description
-batchPollIntervalMs = 1000
+batchPollIntervalMs = 500
 
 # cat=cyberimpact_sync/api; type=int+; label=LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollInitialDelayMs.label
 # LLL:EXT:cyberimpact_sync/Resources/Private/Language/locallang.xlf:ext_conf_template.batchPollInitialDelayMs.description
-batchPollInitialDelayMs = 1000
+batchPollInitialDelayMs = 500
+
+# cat=cyberimpact_sync/api; type=int+; label=Membres par page (fetchSubscribedContacts)
+# Nombre de membres récupérés par page lors de la synchronisation exacte (défaut : 500).
+membersPerPage = 500
+
+# cat=cyberimpact_sync/api; type=int+; label=Pages max membres (fetchSubscribedContacts)
+# Nombre maximum de pages à récupérer (500 membres/page × 200 pages = 100 000 contacts max).
+membersMaxPages = 200

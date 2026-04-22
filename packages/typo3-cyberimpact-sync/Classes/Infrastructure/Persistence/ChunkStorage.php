@@ -34,6 +34,40 @@ final class ChunkStorage
         return (int)$connection->lastInsertId('tx_cyberimpactsync_chunk');
     }
 
+    public function findNextPendingChunkForRun(int $runUid): ?array
+    {
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable('tx_cyberimpactsync_chunk');
+        $row = $queryBuilder
+            ->select('*')
+            ->from('tx_cyberimpactsync_chunk')
+            ->where(
+                $queryBuilder->expr()->eq('run_uid', $queryBuilder->createNamedParameter($runUid, ParameterType::INTEGER)),
+                $queryBuilder->expr()->eq('status', $queryBuilder->createNamedParameter('pending'))
+            )
+            ->orderBy('chunk_index', 'ASC')
+            ->addOrderBy('uid', 'ASC')
+            ->setMaxResults(1)
+            ->executeQuery()
+            ->fetchAssociative();
+
+        return $row !== false ? $row : null;
+    }
+
+    public function countAllChunksForRun(int $runUid): int
+    {
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable('tx_cyberimpactsync_chunk');
+        $count = $queryBuilder
+            ->count('uid')
+            ->from('tx_cyberimpactsync_chunk')
+            ->where(
+                $queryBuilder->expr()->eq('run_uid', $queryBuilder->createNamedParameter($runUid, ParameterType::INTEGER))
+            )
+            ->executeQuery()
+            ->fetchOne();
+
+        return (int)$count;
+    }
+
     public function findNextPendingChunk(): ?array
     {
         $queryBuilder = $this->connectionPool->getQueryBuilderForTable('tx_cyberimpactsync_chunk');
@@ -143,6 +177,36 @@ final class ChunkStorage
             ->fetchOne();
 
         return (int)$count;
+    }
+
+    /**
+     * Retourne tous les compteurs de statuts d'un run en une seule requête GROUP BY.
+     * Remplace 3-4 appels séparés à countChunksByRunAndStatus() + countAllChunksForRun().
+     *
+     * @return array{pending: int, processing: int, done: int, failed: int, total: int}
+     */
+    public function countChunksByRunGrouped(int $runUid): array
+    {
+        $connection = $this->connectionPool->getConnectionForTable('tx_cyberimpactsync_chunk');
+        $rows = $connection->executeQuery(
+            'SELECT status, COUNT(*) AS cnt
+             FROM tx_cyberimpactsync_chunk
+             WHERE run_uid = :runUid
+             GROUP BY status',
+            ['runUid' => $runUid],
+            ['runUid' => ParameterType::INTEGER]
+        )->fetchAllAssociative();
+
+        $counts = ['pending' => 0, 'processing' => 0, 'done' => 0, 'failed' => 0];
+        foreach ($rows as $row) {
+            $s = (string)($row['status'] ?? '');
+            if (array_key_exists($s, $counts)) {
+                $counts[$s] = (int)($row['cnt'] ?? 0);
+            }
+        }
+        $counts['total'] = $counts['pending'] + $counts['processing'] + $counts['done'] + $counts['failed'];
+
+        return $counts;
     }
 
     public function updateChunkStatus(int $chunkUid, string $status): void

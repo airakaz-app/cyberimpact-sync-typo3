@@ -81,11 +81,10 @@ final class ContactRowMapper
     {
         $contactsByEmail = [];
         $errors = [];
-        $rowIndex = 0;
 
         foreach ($rows as $row) {
-            $rowIndex++;
-            $rowNumber = (string)$rowIndex;
+            // Utilise _rownum (numéro réel de la ligne Excel) comme en auto-detect
+            $rowNumber = (string)($row['_rownum'] ?? '');
 
             // Extraire l'email (obligatoire)
             $emailKey = $resolvedMap['standard']['email'] ?? null;

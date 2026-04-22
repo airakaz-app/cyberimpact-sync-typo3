@@ -206,21 +206,23 @@ final class ExcelChunkReader
             }
 
             foreach ($cells as $cell) {
+                // Utilise la référence de cellule (ex : "C3") pour calculer l'index de colonne.
+                // Sans ça, les cellules vides omises du XML décalent toutes les colonnes suivantes.
+                $colIndex = self::cellRefToColumnIndex((string)($cell['r'] ?? ''));
                 $rawValue = (string)($cell->v ?? '');
-                $type = (string)($cell['t'] ?? '');
+                $type     = (string)($cell['t'] ?? '');
 
-                if ($type === 's' && $rawValue !== '') {
-                    $index = (int)$rawValue;
-                    $values[] = $sharedStrings[$index] ?? '';
-                } else {
-                    $values[] = trim($rawValue);
-                }
+                $values[$colIndex] = ($type === 's' && $rawValue !== '')
+                    ? ($sharedStrings[(int)$rawValue] ?? '')
+                    : trim($rawValue);
             }
 
             if ($rowIndex === 0) {
+                // $values est indexé par colonne (0-based), on le réindexe séquentiellement
+                ksort($values);
                 $headers = array_map(
                     static fn (string $value): string => strtolower(trim($value)),
-                    $values
+                    array_values($values)
                 );
                 continue;
             }
@@ -230,12 +232,12 @@ final class ExcelChunkReader
             }
 
             $mappedRow = [];
-            foreach ($headers as $index => $header) {
+            foreach ($headers as $colIdx => $header) {
                 if ($header === '') {
                     continue;
                 }
-
-                $mappedRow[$header] = $values[$index] ?? '';
+                // Cherche la valeur par index de colonne (les cellules vides ne sont pas dans $values)
+                $mappedRow[$header] = $values[$colIdx] ?? '';
             }
 
             $mappedRow['_rownum'] = (string)($rowIndex + 1);
@@ -246,6 +248,29 @@ final class ExcelChunkReader
         }
 
         return $dataRows;
+    }
+
+    /**
+     * Convertit une référence de cellule XLSX (ex : "A1", "B3", "AB12") en index de colonne 0-basé.
+     * Nécessaire pour gérer les cellules vides qui sont omises du XML et provoqueraient sinon
+     * un décalage de toutes les colonnes suivantes.
+     *
+     * A→0, B→1, Z→25, AA→26, AB→27, …
+     */
+    private static function cellRefToColumnIndex(string $ref): int
+    {
+        // Extrait uniquement les lettres (partie colonne)
+        $letters = preg_replace('/[^A-Za-z]/', '', $ref);
+        if ($letters === '' || $letters === null) {
+            return 0;
+        }
+        $letters = strtoupper($letters);
+        $index   = 0;
+        $len     = strlen($letters);
+        for ($i = 0; $i < $len; $i++) {
+            $index = $index * 26 + (ord($letters[$i]) - ord('A') + 1);
+        }
+        return $index - 1;
     }
 
     /**

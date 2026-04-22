@@ -16,6 +16,9 @@ final class ImportSettingsRepository
 {
     private const TABLE = 'tx_cyberimpactsync_import_settings';
 
+    /** Cache in-memory pour éviter de multiples SELECT par requête HTTP (N appels/chunk). */
+    private ?ImportSettings $cache = null;
+
     public function __construct(
         private readonly ConnectionPool $connectionPool
     ) {}
@@ -23,9 +26,14 @@ final class ImportSettingsRepository
     /**
      * Find the first ImportSettings record (typically there's only one per instance).
      * Creates a default one if none exists.
+     * Résultat mis en cache en mémoire pour éviter N SELECT par run (appelé ~2× par chunk).
      */
     public function findFirst(): ImportSettings
     {
+        if ($this->cache !== null) {
+            return $this->cache;
+        }
+
         $queryBuilder = $this->connectionPool->getQueryBuilderForTable(self::TABLE);
         $result = $queryBuilder
             ->select('*')
@@ -35,14 +43,21 @@ final class ImportSettingsRepository
             ->fetchAssociative();
 
         if ($result === false) {
-            // Create default settings if none exist
             $settings = new ImportSettings();
             $settings->setPid(0);
             $this->create($settings);
-            return $settings;
+            $this->cache = $settings;
+            return $this->cache;
         }
 
-        return $this->mapRowToEntity($result);
+        $this->cache = $this->mapRowToEntity($result);
+        return $this->cache;
+    }
+
+    /** Invalide le cache (à appeler après create() ou update()). */
+    public function invalidateCache(): void
+    {
+        $this->cache = null;
     }
 
     /**
@@ -106,6 +121,7 @@ final class ImportSettingsRepository
 
         $uid = (int)$connection->lastInsertId();
         $settings->setUid($uid);
+        $this->invalidateCache();
 
         return $uid;
     }
@@ -125,6 +141,7 @@ final class ImportSettingsRepository
             $this->mapEntityToRow($settings),
             ['uid' => $settings->getUid()]
         );
+        $this->invalidateCache();
     }
 
     /**
