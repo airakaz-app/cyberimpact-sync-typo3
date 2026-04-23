@@ -34,3 +34,7 @@ services:
   Cyberimpact\CyberimpactSync\Command\RunFullImportCommand:
     tags:
       - { name: 'console.command', command: 'cyberimpact:import-complet' }
+
+  Cyberimpact\CyberimpactSync\Command\DiagnosticChunkCommand:
+    tags:
+      - { name: 'console.command', command: 'cyberimpact:diagnostic-chunks' }

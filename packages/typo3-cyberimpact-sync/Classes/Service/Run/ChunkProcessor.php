@@ -37,6 +37,22 @@ final class ChunkProcessor
 
         $chunkUid = (int)$chunk['uid'];
         $runUid   = (int)$chunk['run_uid'];
+        $attemptCount = (int)($chunk['attempt_count'] ?? 0);
+        $maxAttempts = 5; // Limite de 5 tentatives pour éviter les blocages infinis
+
+        // Si le chunk a trop été tenté, le marquer comme échoué pour éviter un blocage infini
+        if ($attemptCount >= $maxAttempts) {
+            $this->chunkStorage->updateChunkStatus($chunkUid, 'failed');
+            $this->errorStorage->createRunError(
+                $runUid,
+                'process',
+                'max_attempts_exceeded',
+                sprintf('Chunk échoué : %d tentatives atteint le maximum', $attemptCount),
+                '',
+                $chunkUid
+            );
+            return true;
+        }
 
         if (!$this->chunkStorage->claimChunkForProcessing($chunkUid)) {
             // Un autre processus a pris ce chunk en charge

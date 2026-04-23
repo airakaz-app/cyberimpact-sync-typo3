@@ -38,7 +38,7 @@ final class ProcessNextRunCommand extends Command
             return Command::SUCCESS;
         }
 
-        $output->writeln('<info>Chunk en attente traité.</info>');
+        $output->writeln('<info>✅ Chunk traité avec succès</info>');
 
         return Command::SUCCESS;
     }

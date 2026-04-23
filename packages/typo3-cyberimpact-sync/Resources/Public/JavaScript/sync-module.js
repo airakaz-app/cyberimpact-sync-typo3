@@ -28,7 +28,7 @@
     // ==================== Pre-loaded data from PHP ====================
     const currentAction  = exactSyncCardBody?.dataset.currentAction || 'unsubscribe';
     const savedGroupId   = mainContainer.dataset.currentGroupId || '';
-    const savedMapping   = tryParseJson(mainContainer.dataset.currentMapping || '');
+    let savedMapping     = tryParseJson(mainContainer.dataset.currentMapping || '');
     const tokenValidated = mainContainer.dataset.tokenValidated === '1';
 
     function tryParseJson(str) {
@@ -37,10 +37,12 @@
 
     // ==================== DOM references ====================
     const testTokenBtn     = document.getElementById('test_token_btn');
+    const changeTokenBtn   = document.getElementById('change_token_btn');
     const tokenInput       = document.getElementById('cyberimpact_token');
     const tokenLoading     = document.getElementById('token_loading');
     const tokenStatus      = document.getElementById('token_status');
     const tokenError       = document.getElementById('token_error');
+    const tokenForm        = document.getElementById('token_form');
 
     const loadFieldsBtn    = document.getElementById('load_fields_btn');
     const fieldsLoading    = document.getElementById('fields_loading');
@@ -64,6 +66,10 @@
     // ==================== Initialize from saved state ====================
     if (tokenValidated && tokenStatus) {
         tokenStatus.classList.remove('cyberimpact-hidden');
+        // Masquer le formulaire si le token est déjà validé
+        if (tokenForm) {
+            tokenForm.classList.add('cyberimpact-hidden');
+        }
     }
 
     if (deleteRadio && currentAction === 'delete') {
@@ -73,9 +79,19 @@
     }
 
     // Auto-load fields if a mapping is saved
-    const hasMapping = savedMapping.standard && Object.keys(savedMapping.standard).length > 0;
+    const hasMapping = (savedMapping.standard && Object.keys(savedMapping.standard).length > 0) ||
+                      (savedMapping.customFields && Object.keys(savedMapping.customFields).length > 0);
     if (hasMapping) {
-        loadFieldsData();
+        loadFieldsData().then(() => {
+            // Masquer le bouton "Enregistrer" et afficher le bouton "Effacer" si un mapping existe
+            const saveBtn = document.querySelector('#mapping_form button[type="submit"]');
+            if (saveBtn) {
+                saveBtn.classList.add('cyberimpact-hidden');
+            }
+            if (clearMappingBtn) {
+                clearMappingBtn.classList.remove('cyberimpact-hidden');
+            }
+        });
     }
 
     // Auto-load groups if a group is saved
@@ -84,7 +100,6 @@
     }
 
     // ==================== Test Token ====================
-    const tokenForm = document.getElementById('token_form');
     if (tokenForm) {
         tokenForm.addEventListener('submit', (e) => e.preventDefault());
     }
@@ -116,6 +131,8 @@
                     document.getElementById('account_email').textContent = data.email    || '-';
                     tokenStatus.classList.remove('cyberimpact-hidden');
                     tokenInput.value = '';
+                    // Masquer le formulaire quand le token est validé
+                    tokenForm.classList.add('cyberimpact-hidden');
                 } else {
                     tokenError.textContent = data.error || 'Erreur inconnue';
                     tokenError.classList.remove('cyberimpact-hidden');
@@ -127,6 +144,20 @@
                 tokenLoading.classList.add('cyberimpact-hidden');
                 testTokenBtn.disabled = false;
             }
+        });
+    }
+
+    // ==================== Change Token ====================
+    if (changeTokenBtn) {
+        changeTokenBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Masquer le statut et afficher le formulaire
+            tokenStatus.classList.add('cyberimpact-hidden');
+            tokenForm.classList.remove('cyberimpact-hidden');
+            // Focus sur l'input
+            tokenInput.focus();
+            // Effacer les erreurs précédentes
+            tokenError.classList.add('cyberimpact-hidden');
         });
     }
 
@@ -151,8 +182,16 @@
 
             mappingTbody.innerHTML = '';
 
+            // Déterminer si on doit filtrer (montrer seulement les champs mappés)
+            const hasSavedMapping = (savedMapping?.standard && Object.keys(savedMapping.standard).length > 0) ||
+                                   (savedMapping?.customFields && Object.keys(savedMapping.customFields).length > 0);
+            const showOnlyMapped = hasSavedMapping;
+
             for (const [key, label] of Object.entries(data.standardFields || {})) {
                 const saved = savedMapping?.standard?.[key] || '';
+                if (showOnlyMapped && saved.trim() === '') {
+                    continue;
+                }
                 const tr = document.createElement('tr');
                 tr.innerHTML = '<td>' + escapeHtml(label) + '</td>'
                     + '<td><input type="text" name="standard[' + escapeHtml(key) + ']" '
@@ -161,8 +200,24 @@
                 mappingTbody.appendChild(tr);
             }
 
+            // Ajouter un en-tête pour les champs personnalisés s'il y en a
+            if (data.customFields && data.customFields.length > 0) {
+                const hasCustomMapped = data.customFields.some(field => {
+                    const saved = savedMapping?.customFields?.[String(field.id)] || '';
+                    return !showOnlyMapped || saved.trim() !== '';
+                });
+                if (hasCustomMapped) {
+                    const headerTr = document.createElement('tr');
+                    headerTr.innerHTML = '<td colspan="2" style="font-weight: bold; background-color: #f5f7fa; padding: 0.75rem; border-bottom: 2px solid #e5e7eb;">Champs personnalisés</td>';
+                    mappingTbody.appendChild(headerTr);
+                }
+            }
+
             for (const field of (data.customFields || [])) {
                 const saved = savedMapping?.customFields?.[String(field.id)] || '';
+                if (showOnlyMapped && saved.trim() === '') {
+                    continue;
+                }
                 const tr = document.createElement('tr');
                 tr.innerHTML = '<td>' + escapeHtml(field.name) + '</td>'
                     + '<td><input type="text" name="customFields[' + escapeHtml(String(field.id)) + ']" '
@@ -191,12 +246,42 @@
 
     // ==================== Clear Mapping ====================
     if (clearMappingBtn) {
-        clearMappingBtn.addEventListener('click', (e) => {
+        console.log('Clear mapping button found and initialized');
+        clearMappingBtn.addEventListener('click', async (e) => {
             e.preventDefault();
-            mappingTbody.innerHTML = '';
-            mappingForm.classList.add('cyberimpact-hidden');
-            mappingEmptyHint.classList.remove('cyberimpact-hidden');
+            console.log('Clear mapping button clicked');
+            // Supprimer immédiatement le mapping sauvegardé
+            try {
+                const response = await fetch(apiUrls.columnMapping, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: '', // Corps vide pour supprimer le mapping
+                });
+                const result = await response.json();
+                if (result.ok) {
+                    savedMapping = {}; // Vider le mapping local
+                    showMessage(mappingMessage, '✓ ' + result.message, 'success');
+                    // Recharger les champs pour afficher tous les champs vides
+                    await loadFieldsData();
+                    // Masquer le bouton "Effacer" et afficher le bouton "Enregistrer"
+                    clearMappingBtn.classList.add('cyberimpact-hidden');
+                    const saveBtn = document.querySelector('#mapping_form button[type="submit"]');
+                    if (saveBtn) {
+                        saveBtn.classList.remove('cyberimpact-hidden');
+                        console.log('Save button shown, clear button hidden');
+                    }
+                } else {
+                    showMessage(mappingMessage, '✗ ' + (result.error || 'Erreur inconnue'), 'danger');
+                }
+            } catch (err) {
+                showMessage(mappingMessage, '✗ Erreur réseau: ' + err.message, 'danger');
+            }
         });
+    } else {
+        console.log('Clear mapping button NOT found');
     }
 
     // ==================== Load Groups ====================
@@ -262,6 +347,14 @@
                 const result = await response.json();
                 if (result.ok) {
                     showMessage(mappingMessage, '✓ ' + result.message, 'success');
+                    // Masquer le bouton "Enregistrer" et afficher le bouton "Effacer" après sauvegarde réussie
+                    const saveBtn = mappingForm.querySelector('button[type="submit"]');
+                    if (saveBtn) {
+                        saveBtn.classList.add('cyberimpact-hidden');
+                    }
+                    if (clearMappingBtn) {
+                        clearMappingBtn.classList.remove('cyberimpact-hidden');
+                    }
                 } else {
                     showMessage(mappingMessage, '✗ ' + (result.error || 'Erreur inconnue'), 'danger');
                 }

@@ -150,7 +150,7 @@ final class CyberimpactClient
                 'GET',
                 [
                     'headers' => $this->buildHeaders($ctx['token'], 'fetch_members_p' . $page),
-                    'query'   => ['page' => $page, 'limit' => $limit, 'status' => 'subscribed'],
+                    'query'   => ['page' => $page, 'limit' => $limit],
                     'timeout' => $ctx['timeout'],
                 ],
                 $ctx['settings']

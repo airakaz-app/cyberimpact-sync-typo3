@@ -53,7 +53,6 @@ final class SyncModuleController
             $apiUrls = $this->buildApiUrls();
             $content = $flash
                 . $this->renderUploadForm($apiUrls)
-                . $this->renderExactSyncSettings($apiUrls)
                 . $this->renderRunsList();
 
             $runUid = (int)($request->getQueryParams()['run'] ?? 0);
@@ -385,7 +384,7 @@ final class SyncModuleController
         }
 
         $parsedBody     = (array)$request->getParsedBody();
-        $exactSync      = isset($parsedBody['exact_sync']) && (string)($parsedBody['exact_sync']) === '1';
+        $exactSync      = true; // Synchronisation exacte activée par défaut
         $importSettings = $this->importSettingsRepository->findFirst();
         $extSettings    = $this->getExtSettings();
         $storageUid     = (int)($extSettings['falStorageUid']  ?? 1);
@@ -415,10 +414,8 @@ final class SyncModuleController
             return ['ok' => false, 'error' => 'Un run est déjà en cours pour ce fichier.', 'httpCode' => 409];
         }
 
-        // Cocher "Synchronisation exacte" dans l'UI vaut confirmation explicite de l'utilisateur.
-        if ($exactSync) {
-            $this->runStorage->markExactSyncConfirmed($runUid);
-        }
+        // Synchronisation exacte toujours activée et confirmée
+        $this->runStorage->markExactSyncConfirmed($runUid);
 
         $stats = $this->runPreparationService->prepareRun(
             $runUid,
@@ -443,6 +440,8 @@ final class SyncModuleController
             $accountUser            = htmlspecialchars((string)($s->getCyberimpactUsername() ?? ''));
             $accountEmail           = htmlspecialchars((string)($s->getCyberimpactEmail()    ?? ''));
             $tokenStatusHidden      = $tokenValidated === '1' ? '' : ' cyberimpact-hidden';
+            $tokenFormHidden        = $tokenValidated === '1' ? ' cyberimpact-hidden' : '';
+            $mappingBtnHidden       = $s->getColumnMapping() !== null ? ' cyberimpact-hidden' : '';
             $mappingJson            = htmlspecialchars(
                 json_encode($s->getColumnMapping() ?? [], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}'
             );
@@ -452,15 +451,25 @@ final class SyncModuleController
             $groupBadge             = ($s->getSelectedGroupId() !== null && $s->getSelectedGroupId() > 0)
                 ? 'Groupe #' . $currentGroupId
                 : 'Aucun';
+            $currentAction          = $s->getMissingContactsAction();
+            $exactSyncUrl           = htmlspecialchars($apiUrls['exactSyncSettings'] ?? '');
+            $unsubscribeChecked     = $currentAction === 'unsubscribe' ? 'checked' : '';
+            $deleteChecked          = $currentAction === 'delete'      ? 'checked' : '';
         } catch (\Throwable) {
             $tokenValidated    = '0';
             $accountName       = $accountUser = $accountEmail = '';
             $tokenStatusHidden = ' cyberimpact-hidden';
+            $tokenFormHidden   = '';
+            $mappingBtnHidden  = '';
             $mappingJson       = '{}';
             $currentGroupId    = '';
             $missingActionLabel = 'Désabonner';
             $mappingBadge      = 'Auto-détection';
             $groupBadge        = 'Aucun';
+            $currentAction     = 'unsubscribe';
+            $exactSyncUrl      = '';
+            $unsubscribeChecked = 'checked';
+            $deleteChecked     = '';
         }
 
         $dataAttrs = ' data-url-upload="'                . htmlspecialchars($apiUrls['upload']            ?? '') . '"'
@@ -499,6 +508,7 @@ final class SyncModuleController
 .cyberimpact-btn-secondary:hover{background:#e5e7eb}
 .cyberimpact-btn-success{background:#10b981;color:#fff}
 .cyberimpact-btn-success:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(16,185,129,.3)}
+.cyberimpact-btn-sm{padding:.375rem .75rem;font-size:.8rem;border-radius:6px}
 .cyberimpact-alert{padding:1rem 1.25rem;border-radius:8px;margin-bottom:1rem;border-left:4px solid;font-size:.9rem}
 .cyberimpact-alert-success{background:#ecfdf5;border-color:#10b981;color:#065f46}
 .cyberimpact-alert-danger{background:#fef2f2;border-color:#ef4444;color:#7f1d1d}
@@ -531,7 +541,7 @@ final class SyncModuleController
                 <h3>Connexion API</h3>
             </div>
             <div class="cyberimpact-card-body">
-                <form id="token_form">
+                <form id="token_form"$tokenFormHidden>
                     <div class="cyberimpact-form-group" style="max-width:450px">
                         <label for="cyberimpact_token">Token API Cyberimpact</label>
                         <input type="password" class="cyberimpact-form-control" id="cyberimpact_token"
@@ -554,6 +564,11 @@ final class SyncModuleController
                         Compte : <strong id="account_name">$accountName</strong><br>
                         Utilisateur : <em id="account_user">$accountUser</em>
                         (<em id="account_email">$accountEmail</em>)
+                        <div style="margin-top:1rem">
+                            <button type="button" id="change_token_btn" class="cyberimpact-btn cyberimpact-btn-secondary cyberimpact-btn-sm">
+                                🔄 Changer de token
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div id="token_error" class="cyberimpact-alert cyberimpact-alert-danger cyberimpact-hidden"></div>
@@ -591,7 +606,7 @@ final class SyncModuleController
                         </table>
                     </div>
                     <div style="display:flex;gap:.75rem">
-                        <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary">Enregistrer le mapping</button>
+                        <button type="submit" class="cyberimpact-btn cyberimpact-btn-primary$mappingBtnHidden">Enregistrer le mapping</button>
                         <button type="button" class="cyberimpact-btn cyberimpact-btn-secondary" id="clear_mapping_btn">Effacer</button>
                     </div>
                     <div id="mappingMessage" style="margin-top:1rem;display:none;padding:1rem;border-radius:8px"></div>
@@ -637,11 +652,43 @@ final class SyncModuleController
         </div>
     </div>
 
-    <!-- Étape 4 : Import -->
+    <!-- Étape 4 : Paramètres de synchronisation exacte -->
     <div class="cyberimpact-section">
         <div class="cyberimpact-card">
             <div class="cyberimpact-card-header">
                 <span class="cyberimpact-step-number">4</span>
+                <h3>Paramètres de synchronisation exacte</h3>
+            </div>
+            <div class="cyberimpact-card-body"
+                 data-current-action="$currentAction"
+                 data-url-exact-sync-settings="$exactSyncUrl">
+                <p style="margin:0 0 1.5rem;color:#6b7280;font-size:.95rem">
+                    Action à appliquer aux contacts présents dans Cyberimpact
+                    mais absents du fichier importé lors d'une synchronisation exacte.
+                </p>
+                <form id="exactSyncForm" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500">
+                        <input type="radio" name="missing_contacts_action" value="unsubscribe"
+                               id="action-unsubscribe" $unsubscribeChecked /> Désabonner
+                    </label>
+                    <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500">
+                        <input type="radio" name="missing_contacts_action" value="delete"
+                               id="action-delete" $deleteChecked /> Supprimer
+                    </label>
+                    <button type="button" class="cyberimpact-btn cyberimpact-btn-primary" id="saveExactSyncBtn">
+                        Sauvegarder
+                    </button>
+                </form>
+                <div id="exactSyncMessage" style="margin-top:1rem;display:none;padding:1rem;border-radius:8px"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Étape 5 : Import -->
+    <div class="cyberimpact-section">
+        <div class="cyberimpact-card">
+            <div class="cyberimpact-card-header">
+                <span class="cyberimpact-step-number">5</span>
                 <h3>Importer votre fichier</h3>
             </div>
             <div class="cyberimpact-card-body">
@@ -659,22 +706,6 @@ final class SyncModuleController
                         <input class="cyberimpact-form-control" type="file" id="source_file"
                                name="source_file" accept=".xlsx" required>
                         <p class="cyberimpact-hint">Fichier Excel avec une ligne d'en-tête</p>
-                    </div>
-
-                    <div class="cyberimpact-form-group" style="margin-bottom:1.5rem">
-                        <label style="display:flex;align-items:flex-start;gap:.6rem;cursor:pointer;font-weight:normal">
-                            <input type="checkbox" name="exact_sync" value="1" id="exact_sync_check"
-                                   style="margin-top:3px;cursor:pointer">
-                            <span>
-                                <strong>Synchronisation exacte</strong><br>
-                                <span class="cyberimpact-hint">
-                                    Après l'import, les contacts présents dans Cyberimpact
-                                    mais absents du fichier seront traités avec l'action configurée :
-                                    <strong>{$missingActionLabel}</strong>.<br>
-                                    Cocher cette case vaut confirmation — l'action sera exécutée automatiquement.
-                                </span>
-                            </span>
-                        </label>
                     </div>
 
                     <button class="cyberimpact-btn cyberimpact-btn-success" type="submit">
@@ -722,7 +753,7 @@ HTML;
                 </label>
                 <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-weight:500">
                     <input type="radio" name="missing_contacts_action" value="delete"
-                           id="action-delete" $deleteChecked /> Supprimer définitivement
+                           id="action-delete" $deleteChecked /> Supprimer
                 </label>
                 <button type="button" class="cyberimpact-btn cyberimpact-btn-primary" id="saveExactSyncBtn">
                     Sauvegarder
