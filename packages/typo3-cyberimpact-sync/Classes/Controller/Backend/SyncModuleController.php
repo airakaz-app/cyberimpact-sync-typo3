@@ -486,7 +486,7 @@ final class SyncModuleController
 
         return <<<HTML
 <style>
-.cyberimpact-container{max-width:1200px;margin:2rem 0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.cyberimpact-container{max-width:1200px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
 .cyberimpact-header{background:#667eea;color:#fff;padding:3rem 2rem;border-radius:8px;margin-bottom:2.5rem;box-shadow:0 10px 30px rgba(102,126,234,.15)}
 .cyberimpact-header h1{margin:0 0 .5rem;font-size:2rem;font-weight:600;letter-spacing:-.5px}
 .cyberimpact-header p{margin:0;opacity:.95;font-size:.95rem}

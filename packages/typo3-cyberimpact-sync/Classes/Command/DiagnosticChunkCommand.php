@@ -5,37 +5,45 @@ declare(strict_types=1);
 namespace Cyberimpact\CyberimpactSync\Command;
 
 use Cyberimpact\CyberimpactSync\Infrastructure\Persistence\ChunkStorage;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Helper\Table;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use Doctrine\DBAL\ParameterType;
+use TYPO3\CMS\Core\Log\LogManager;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 #[AsCommand(name: 'cyberimpact:diagnostic-chunks', description: 'Diagnostic des états des chunks et détection des blocages.')]
 final class DiagnosticChunkCommand extends Command
 {
+    private readonly LoggerInterface $logger;
+
     public function __construct(
         private readonly ChunkStorage $chunkStorage,
         private readonly ConnectionPool $connectionPool,
     ) {
         parent::__construct();
+        $this->logger = GeneralUtility::makeInstance(LogManager::class)->getLogger(__CLASS__);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $this->logger->info('Lancement du diagnostic des chunks.');
         $connection = $this->connectionPool->getConnectionForTable('tx_cyberimpactsync_chunk');
 
-        // Statistiques globales
+        // 1. Statistiques globales
         $stats = $connection->executeQuery(
             'SELECT status, COUNT(*) as cnt FROM tx_cyberimpactsync_chunk GROUP BY status'
         )->fetchAllAssociative();
 
         $output->writeln("\n<fg=cyan;options=bold>=== STATISTIQUES GLOBALES ===</>\n");
+        $logStats = [];
         foreach ($stats as $stat) {
             $status = (string)($stat['status'] ?? '');
             $count = (int)($stat['cnt'] ?? 0);
+            $logStats[$status] = $count;
             $icon = match ($status) {
                 'done' => '✅',
                 'pending' => '⏳',
@@ -45,8 +53,9 @@ final class DiagnosticChunkCommand extends Command
             };
             $output->writeln(sprintf("  %s %s: %d", $icon, $status, $count));
         }
+        $this->logger->debug('Stats globales des chunks', $logStats);
 
-        // Chunks en processing (bloqués potentiellement)
+        // 2. Chunks bloqués
         $output->writeln("\n<fg=cyan;options=bold>=== CHUNKS EN PROCESSING ===</>\n");
         $processing = $connection->executeQuery(
             'SELECT uid, run_uid, chunk_index, attempt_count, 
@@ -61,24 +70,22 @@ final class DiagnosticChunkCommand extends Command
         if (empty($processing)) {
             $output->writeln("  ✅ Aucun chunk bloqué");
         } else {
-            $output->writeln(sprintf("  ⚠️  <fg=red>%d chunk(s) bloqué(s)</>\n", count($processing)));
+            $countBlocked = count($processing);
+            $this->logger->warning(sprintf('%d chunks semblent bloqués en état "processing".', $countBlocked));
+            
+            $output->writeln(sprintf("  ⚠️  <fg=red>%d chunk(s) bloqué(s)</>\n", $countBlocked));
             foreach ($processing as $chunk) {
                 $uid = (int)($chunk['uid'] ?? 0);
-                $idx = (int)($chunk['chunk_index'] ?? 0);
-                $attempts = (int)($chunk['attempt_count'] ?? 0);
-                $ageSeconds = (int)($chunk['age_seconds'] ?? 0);
-                $ageMin = ceil($ageSeconds / 60);
+                $ageMin = (int)ceil(($chunk['age_seconds'] ?? 0) / 60);
+                
                 $output->writeln(sprintf(
                     "    Chunk %d (UID %d): bloqué depuis %d min, %d tentatives",
-                    $idx,
-                    $uid,
-                    $ageMin,
-                    $attempts
+                    (int)$chunk['chunk_index'], $uid, $ageMin, (int)$chunk['attempt_count']
                 ));
             }
         }
 
-        // Chunks avec beaucoup de tentatives
+        // 3. Chunks à risque
         $output->writeln("\n<fg=cyan;options=bold>=== CHUNKS À RISQUE (3+ tentatives) ===</>\n");
         $risky = $connection->executeQuery(
             'SELECT uid, run_uid, chunk_index, status, attempt_count
@@ -87,27 +94,20 @@ final class DiagnosticChunkCommand extends Command
              ORDER BY attempt_count DESC'
         )->fetchAllAssociative();
 
-        if (empty($risky)) {
-            $output->writeln("  ✅ Aucun chunk à risque");
-        } else {
+        if (!empty($risky)) {
+            $this->logger->error(sprintf('%d chunks ont échoué plus de 3 fois.', count($risky)), ['risky_chunks' => $risky]);
             $output->writeln(sprintf("  ⚠️  <fg=yellow>%d chunk(s) à risque</>\n", count($risky)));
             foreach ($risky as $chunk) {
-                $idx = (int)($chunk['chunk_index'] ?? 0);
-                $status = (string)($chunk['status'] ?? '');
-                $attempts = (int)($chunk['attempt_count'] ?? 0);
-                $output->writeln(sprintf(
-                    "    Chunk %d (%s): %d tentatives",
-                    $idx,
-                    $status,
-                    $attempts
-                ));
+                $output->writeln(sprintf("    Chunk %d (%s): %d tentatives", (int)$chunk['chunk_index'], (string)$chunk['status'], (int)$chunk['attempt_count']));
             }
+        } else {
+            $output->writeln("  ✅ Aucun chunk à risque");
         }
 
-        // Runs actifs
+        // 4. Runs actifs
         $output->writeln("\n<fg=cyan;options=bold>=== RUNS ACTIFS ===</>\n");
         $runs = $connection->executeQuery(
-            'SELECT DISTINCT run_uid, status FROM tx_cyberimpactsync_chunk ORDER BY run_uid DESC LIMIT 5'
+            'SELECT DISTINCT run_uid FROM tx_cyberimpactsync_chunk ORDER BY run_uid DESC LIMIT 5'
         )->fetchAllAssociative();
 
         if (empty($runs)) {
@@ -122,23 +122,16 @@ final class DiagnosticChunkCommand extends Command
                 )->fetchAllAssociative();
 
                 $summary = [];
-                foreach ($counts as $c) {
-                    $s = (string)($c['status'] ?? '');
-                    $n = (int)($c['cnt'] ?? 0);
-                    $summary[$s] = $n;
-                }
+                foreach ($counts as $c) { $summary[(string)$c['status']] = (int)$c['cnt']; }
 
                 $output->writeln(sprintf(
                     "  Run #%d: pending=%d, processing=%d, done=%d, failed=%d",
-                    $runUid,
-                    $summary['pending'] ?? 0,
-                    $summary['processing'] ?? 0,
-                    $summary['done'] ?? 0,
-                    $summary['failed'] ?? 0
+                    $runUid, $summary['pending'] ?? 0, $summary['processing'] ?? 0, $summary['done'] ?? 0, $summary['failed'] ?? 0
                 ));
             }
         }
 
+        $this->logger->info('Diagnostic terminé avec succès.');
         $output->writeln("\n<fg=green;options=bold>Diagnostic terminé</>\n");
 
         return Command::SUCCESS;
