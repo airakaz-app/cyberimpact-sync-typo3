@@ -95,7 +95,15 @@ final class ScanImportFolderCommand extends Command
                     $stats['chunkCount']
                 ));
             } catch (\Throwable $e) {
-                $this->logger->error(sprintf('Erreur lors de la préparation du fichier %s : %s', $file->getName(), $e->getMessage()));
+                $this->logger->error(
+                    sprintf('Erreur critique lors de la préparation du fichier %s : %s', $file->getName(), $e->getMessage()),
+                    ['exception' => $e, 'runUid' => $runUid]
+                );
+                $output->writeln(sprintf(
+                    '  ✗ Erreur Run #%d : %s',
+                    $runUid,
+                    $e->getMessage()
+                ));
             }
         }
 

@@ -34,23 +34,33 @@ final class ImportSchedulerTask extends AbstractTask
             $scanCommand = GeneralUtility::makeInstance(ScanImportFolderCommand::class);
             $scanCommand->run(new ArrayInput([]), new NullOutput());
 
-            // Étape 2 : Chunks
+            // Étape 2 : Chunks - Continuer jusqu'à ce qu'il n'y ait aucun chunk restant
             $processCommand = GeneralUtility::makeInstance(ProcessNextRunCommand::class);
-            for ($i = 0; $i < 10; $i++) {
+            $chunkCount = 0;
+            $lastError = '';
+            while (true) {
                 $result = $processCommand->run(new ArrayInput([]), new NullOutput());
                 if ($result !== 0) {
-                    $this->logger->error('Arrêt du traitement des chunks : aucun chunk restant ou erreur.', ['result' => $result]);
+                    // Aucun chunk restant ou erreur critique
+                    $this->logger->notice('Traitement des chunks terminé.', ['chunks_traites' => $chunkCount]);
                     break;
                 }
-                $this->logger->error('Chunk {iteration} traité avec succès.', ['iteration' => $i + 1]);
+                $chunkCount++;
+                $this->logger->info('Chunk traité avec succès.', ['chunk_numero' => $chunkCount]);
             }
 
-            // Étape 3 : Finalisation
+            // Étape 3 : Finalisation - Continuer jusqu'à ce qu'il n'y ait aucun run à finaliser
             $finalizeCommand = GeneralUtility::makeInstance(FinalizeRunCommand::class);
-            for ($i = 0; $i < 5; $i++) {
+            $runCount = 0;
+            while (true) {
                 $result = $finalizeCommand->run(new ArrayInput([]), new NullOutput());
-                if ($result !== 0) break;
-                $this->logger->error('Run {iteration} finalisé.', ['iteration' => $i + 1]);
+                if ($result !== 0) {
+                    // Aucun run restant à finaliser
+                    $this->logger->notice('Finalisation des runs terminée.', ['runs_finalises' => $runCount]);
+                    break;
+                }
+                $runCount++;
+                $this->logger->info('Run finalisé avec succès.', ['run_numero' => $runCount]);
             }
 
             return true;

@@ -89,11 +89,14 @@ final class ContactRowMapper
             // Extraire l'email (obligatoire)
             $emailKey = $resolvedMap['standard']['email'] ?? null;
             if ($emailKey === null) {
+                $missingFields = array_keys(
+                    array_filter($resolvedMap['standard'], static fn($v) => $v === null)
+                );
                 $errors[] = [
                     'row' => $rowNumber,
-                    'code' => 'no_email_column',
-                    'message' => 'Colonne email non trouvée dans le mapping.',
-                    'payload' => '{}',
+                    'code' => 'missing_email_column',
+                    'message' => 'Colonne email non trouvée dans le mapping. Colonnes manquantes : ' . implode(', ', $missingFields ?: ['email']),
+                    'payload' => json_encode(['missing_fields' => $missingFields ?: ['email']], JSON_UNESCAPED_UNICODE) ?: '{}',
                 ];
                 continue;
             }

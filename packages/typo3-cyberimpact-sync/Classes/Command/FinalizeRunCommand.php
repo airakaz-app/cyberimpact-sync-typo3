@@ -70,7 +70,8 @@ final class FinalizeRunCommand extends Command
 
             if ($result['status'] === 'none' || $result['status'] === 'deferred' || $result['status'] === 'blocked') {
                 $output->writeln('<comment>' . $result['message'] . '</comment>');
-                return Command::SUCCESS;
+                // Retourner FAILURE pour 'none' afin que le scheduler sache qu'il n'y a plus rien à finaliser
+                return $result['status'] === 'none' ? Command::FAILURE : Command::SUCCESS;
             }
 
             $output->writeln('<info>' . $result['message'] . '</info>');

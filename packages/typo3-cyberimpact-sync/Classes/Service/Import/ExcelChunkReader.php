@@ -20,12 +20,16 @@ final class ExcelChunkReader
      * @param int $chunkSize Taille des chunks
      * @param array{standard:array<string,string>,customFields:array<string,string>}|null $columnMapping Mapping configuré (null = auto-detect)
      * @return iterable<int, array{headers: array<int,string>, rows: array<int,array<string,string>>, resolvedMap: array{standard:array<string,string>,customFields:array<string,string>}|null}>
+     * @throws \RuntimeException si fichier invalide ou trop volumineux
      */
     public function readChunksFromLocalFile(
         string $localFilePath,
         int $chunkSize = 500,
         ?array $columnMapping = null
     ): iterable {
+        // Validation du fichier
+        $this->validateFile($localFilePath);
+        
         $allRows = $this->readRows($localFilePath);
 
         if (empty($allRows)) {
@@ -162,7 +166,48 @@ final class ExcelChunkReader
     }
 
     /**
+     * Valide que le fichier est un XLSX valide et dans les limites acceptables.
+     * @throws \RuntimeException
+     */
+    private function validateFile(string $localFilePath): void
+    {
+        if (!file_exists($localFilePath)) {
+            throw new \RuntimeException('Fichier non trouvé : ' . $localFilePath);
+        }
+        
+        if (!is_readable($localFilePath)) {
+            throw new \RuntimeException('Fichier non lisible : ' . $localFilePath);
+        }
+        
+        $maxFileSize = 100 * 1024 * 1024; // 100 MB
+        $fileSize = filesize($localFilePath);
+        if ($fileSize === false || $fileSize > $maxFileSize) {
+            throw new \RuntimeException(
+                sprintf('Fichier trop volumineux : %s (max %dMB)', 
+                    $localFilePath, 
+                    $maxFileSize / (1024 * 1024)
+                )
+            );
+        }
+        
+        // Validation MIME (simples vérifications)
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeType = finfo_file($finfo, $localFilePath);
+        finfo_close($finfo);
+        
+        $validMimes = ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 
+                       'application/x-zip-compressed', 'application/zip'];
+        
+        if (!in_array($mimeType, $validMimes, true)) {
+            throw new \RuntimeException(
+                sprintf('Type de fichier invalide : %s (doit être XLSX)', $mimeType)
+            );
+        }
+    }
+
+    /**
      * @return array<int, array<string, string>>
+     * @throws \RuntimeException
      */
     private function readRows(string $localFilePath): array
     {
@@ -183,9 +228,11 @@ final class ExcelChunkReader
 
         libxml_use_internal_errors(true);
         $sheet = simplexml_load_string($sheetXml);
+        $errors = libxml_get_errors();
         libxml_clear_errors();
-        if ($sheet === false) {
-            return [];
+        
+        if ($sheet === false || !empty($errors)) {
+            throw new \RuntimeException('Fichier Excel malformé : impossible de parser le contenu XML');
         }
 
         $sheet->registerXPathNamespace('main', self::XLSX_NS);

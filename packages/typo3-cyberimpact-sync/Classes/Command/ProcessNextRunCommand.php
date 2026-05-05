@@ -50,7 +50,7 @@ final class ProcessNextRunCommand extends Command
                 // On log en debug car c'est un état normal si tout est fini
                 $this->logger->debug('Aucun chunk en attente à traiter.');
                 $output->writeln('<comment>Aucun chunk en attente trouvé.</comment>');
-                return Command::SUCCESS;
+                return Command::FAILURE;
             }
 
             $this->logger->info('Chunk traité avec succès par la commande.');

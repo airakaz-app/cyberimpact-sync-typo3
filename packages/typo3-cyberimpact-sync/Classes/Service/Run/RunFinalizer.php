@@ -73,11 +73,11 @@ final class RunFinalizer
         $this->runStorage->updateRunStatus($runUid, $finalStatus);
         $this->writeReport($runUid, $finalStatus, $pendingChunks, $processingChunks, $doneChunks, $failedChunks);
 
-        // --- AJOUT : ARCHIVAGE DU FICHIER ---
-        if (!empty($run['file_uid'])) {
-            $this->archiveFile((int)$run['file_uid']);
+        // Archivage du fichier source (correction : source_file_uid au lieu de file_uid)
+        $sourceFileUid = (int)($run['source_file_uid'] ?? 0);
+        if ($sourceFileUid > 0) {
+            $this->archiveFile($sourceFileUid);
         }
-        // -------------------------------------
 
         return [
             'status'      => 'finalized',
