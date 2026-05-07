@@ -183,4 +183,27 @@ final class RunStorage
 
         return $row !== false ? $row : null;
     }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function findQueuedOrProcessingRuns(): array
+    {
+        $queryBuilder = $this->connectionPool->getQueryBuilderForTable('tx_cyberimpactsync_run');
+
+        $rows = $queryBuilder
+            ->select('*')
+            ->from('tx_cyberimpactsync_run')
+            ->where(
+                $queryBuilder->expr()->in('status', [
+                    $queryBuilder->createNamedParameter('queued'),
+                    $queryBuilder->createNamedParameter('processing'),
+                ])
+            )
+            ->orderBy('crdate', 'ASC')
+            ->executeQuery()
+            ->fetchAllAssociative();
+
+        return is_array($rows) ? $rows : [];
+    }
 }
